@@ -1,0 +1,29 @@
+from pathlib import Path
+from typing import Optional
+import yaml
+from pydantic import BaseModel
+
+class ShitBotConfig(BaseModel):
+    bot_base: Path
+    client_base: Path
+    temp_p2v_dir: Path
+    temp_dir: Path
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    @classmethod
+    def from_yaml(cls, file: Path) -> ShitBotConfig:
+        if not file.exists(): raise FileNotFoundError(f"The file doesn't exist: {file}")
+
+        with open(file, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        return cls(**data)
+
+_config_instance: Optional[ShitBotConfig] = None
+def getConfig() -> ShitBotConfig:
+    global _config_instance
+    if _config_instance is None:
+        config_path = Path(__file__).parent / "config.yaml"
+        _config_instance = ShitBotConfig.from_yaml(config_path)
+    return _config_instance
