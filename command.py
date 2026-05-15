@@ -59,8 +59,8 @@ class BotCommand:
         self.session = None
 
 class BotCommandHelp(BotCommand):
-    def __init__(self, session: BotSession):
-        super().__init__(session)
+    def __init__(self, session: BotSession, args: Message=Message(), *, _internal=None):
+        super().__init__(session, args, _internal=_internal)
         self._name = "help"
 
     async def run(self, bot: Bot):
