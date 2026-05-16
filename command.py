@@ -27,6 +27,7 @@ class BotCommand:
         if _internal is not self._sentinel: raise TypeError("Please use BotCommand.make() instead of BotCommand()")
         self._bot = bot
         self._session = session
+        self._name = "otherwise"
         self._argv = args.extract_plain_text().strip().split()
         session.command = self
 
@@ -42,6 +43,10 @@ class BotCommand:
     @property
     def session(self):
         return self._session
+
+    @property
+    def name(self):
+        return self._name
 
     @property
     def argv(self):
@@ -73,6 +78,7 @@ class BotCommand:
 class BotCommandHelp(BotCommand):
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
         super().__init__(bot, session, args, _internal=_internal)
+        self._name = "help"
 
     async def run(self):
         if not self.session:
@@ -117,6 +123,7 @@ class BotCommandHelp(BotCommand):
 class BotCommandConvert(BotCommand):
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
         super().__init__(bot, session, args, _internal=_internal)
+        self._name = "convert"
         self._event = asyncio.Event()
         self._if_accept_pic = False
         self._images : List[str] = []
@@ -181,18 +188,18 @@ class BotCommandConvert(BotCommand):
 
         # Now self.argv == ["start"]
         logger.info(f"用户 {self.session.user_id} 开始了图片收集")
-        await self.bot.send_private_message(user_id=user_id,message="图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。")
+        await self.bot.send_private_msg(user_id=user_id,message="图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。")
         self._if_accept_pic = True
         await self._event.wait()
         # Now self.argv == ["stop"]
         self._if_accept_pic = False
         if self.lock:
-            await self.bot.send_private_message(user_id=user_id,message="下载图片中...")
+            await self.bot.send_private_msg(user_id=user_id,message="下载图片中...")
             async with self.lock:
                 pass
-            await self.bot.send_private_message(user_id=user_id,message="下载完毕。")
+            await self.bot.send_private_msg(user_id=user_id,message="下载完毕。")
         if not self.images:
-            await self.bot.send_private_message(user_id=user_id,message="本次没有收集到任何图片。")
+            await self.bot.send_private_msg(user_id=user_id,message="本次没有收集到任何图片。")
             self.unlock()
             return
 
@@ -220,11 +227,11 @@ class BotCommandConvert(BotCommand):
 
         if count == 0:
             await convertCleanup(self.session.user_id)
-            await self.bot.send_private_message(user_id=user_id,message="没有有效的图片被保存。")
+            await self.bot.send_private_msg(user_id=user_id,message="没有有效的图片被保存。")
             self.unlock()
             return
 
-        await self.bot.send_private_message(user_id=user_id,message=f"有效保存 {count} 张图片，开始处理…")
+        await self.bot.send_private_msg(user_id=user_id,message=f"有效保存 {count} 张图片，开始处理…")
 
         async def _runTask():
             try:

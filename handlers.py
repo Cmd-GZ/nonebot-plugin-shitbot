@@ -22,9 +22,12 @@ async def handleCmdHelp(bot: Bot, event: MessageEvent, args: Message = CommandAr
     if event.message_type != "private": return
     session = BotSession.make("private", str(event.user_id))
     command = BotCommandHelp.make(bot, session, args)
+    if not session.command:
+        tip = "未知错误: 会话command字段为None"
+        await cmd_help.finish(tip)
     if not command:
         tip =  "错误：会话被占用\n"
-        tip += f"命令 {session.command} 正在运行，进行下一步前请先终止它或等待其完成。"
+        tip += f"命令 {session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
         await cmd_help.finish(tip)
 
     await command.run()
@@ -36,12 +39,15 @@ async def handleCmdConvert(bot: Bot, event: MessageEvent, args: Message = Comman
     if event.message_type != "private": return
     session = BotSession.make("private", str(event.user_id))
     command = BotCommandConvert.make(bot, session, args)
-    if not command and session.command != "convert":
+    if not session.command:
+        tip = "未知错误: 会话command字段为None"
+        await cmd_convert.finish(tip)
+    if not command and session.command.name != "convert":
         tip =  "错误：会话被占用\n"
-        tip += f"命令 {session.command} 正在运行，进行下一步前请先终止它或等待其完成。"
+        tip += f"命令 {session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
         await cmd_convert.finish(tip)
 
-    if not command and session.command == "convert":
+    if not command and session.command.name == "convert":
         await session.command.setArgv(args)
 
     if not command: await cmd_convert.finish() # Just for making the incorrect error disappear
@@ -55,9 +61,12 @@ async def handleCmdOtherwise(bot: Bot, event: MessageEvent):
     if event.message_type != "private": return
     session = BotSession.make("private", str(event.user_id))
     command = BotCommand.make(bot, session)
+    if not session.command:
+        tip = "未知错误: 会话command字段为None"
+        await cmd_help.finish(tip)
     if not command:
         tip =  "错误：会话被占用\n"
-        tip += f"命令 {session.command} 正在运行，进行下一步前请先终止它或等待其完成。"
+        tip += f"命令 {session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
         await cmd_otherwise.finish(tip)
 
     await command.run()
