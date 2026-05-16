@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 import httpx
 import uuid
@@ -26,7 +27,7 @@ async def convertCleanup(user_id: str):
             await rmPath(path)
             logger.info(f"已删除: {path}")
 
-async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Message, client: httpx.AsyncClient, dldir: Path, store_list: List[str], user_id: str, depth: int):
+async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Message, client: httpx.AsyncClient, dldir: Path, store_list: asyncio.Queue[str], user_id: str, depth: int):
     reply_segs = []
     if event_reply:
         reply_msgs = await bot.get_msg(message_id=event_reply.message_id)
@@ -49,7 +50,7 @@ async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Mess
                 resp = await client.get(img_url, follow_redirects=True)
                 resp.raise_for_status()
                 save_path.write_bytes(resp.content)
-                store_list.append(str(save_path))
+                await store_list.put(str(save_path))
                 logger.info(f"下载图片成功: {save_path}")
             except Exception as e:
                 logger.error(f"下载图片失败 {img_url}: {e}")

@@ -6,7 +6,8 @@ from pydantic import BaseModel
 class ShitBotConfig(BaseModel):
     bot_base: Path
     client_base: Path
-    script_p2v_path: Path
+    script_png2v_path: Path
+    script_p2png_path: Path
     temp_dir: Path
 
     class Config:

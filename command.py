@@ -13,7 +13,7 @@ from nonebot.params import CommandArg
 from nonebot.log import logger
 
 from .auxiliaries import rmPath, convertCleanup
-from .tasks import convertP2V
+from .tasks import convertPng2V, convertP2Png
 from .config import getConfig
 config = getConfig()
 
@@ -125,21 +125,36 @@ class BotCommandConvert(BotCommand):
         super().__init__(bot, session, args, _internal=_internal)
         self._name = "convert"
         self._event = asyncio.Event()
+        self._p2png_event = asyncio.Event()
         self._if_accept_pic = False
+        self._temp_images: asyncio.Queue[str] = asyncio.Queue()
         self._images : List[str] = []
-        self._lock: asyncio.Lock = asyncio.Lock()
+        self._download_lock: asyncio.Lock = asyncio.Lock()
+        self._copy_lock: asyncio.Lock = asyncio.Lock()
+
+    @property
+    def p2png_event(self):
+        return self._p2png_event
 
     @property
     def if_accept_pic(self):
         return self._if_accept_pic
 
     @property
+    def temp_images(self):
+        return self._temp_images
+
+    @property
     def images(self):
         return self._images
 
     @property
-    def lock(self):
-        return self._lock
+    def download_lock(self):
+        return self._download_lock
+
+    @property
+    def copy_lock(self):
+        return self._copy_lock
 
     async def setArgv(self, args: Message):
         if not self.session: return
@@ -190,52 +205,40 @@ class BotCommandConvert(BotCommand):
         logger.info(f"用户 {self.session.user_id} 开始了图片收集")
         await self.bot.send_private_msg(user_id=user_id,message="图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。")
         self._if_accept_pic = True
+        asyncio.create_task(convertP2Png(self))
         await self._event.wait()
         # Now self.argv == ["stop"]
         self._if_accept_pic = False
-        if self.lock:
-            await self.bot.send_private_msg(user_id=user_id,message="下载图片中...")
-            async with self.lock:
-                pass
-            await self.bot.send_private_msg(user_id=user_id,message="下载完毕。")
-        if not self.images:
-            await self.bot.send_private_msg(user_id=user_id,message="本次没有收集到任何图片。")
-            self.unlock()
-            return
 
-        logger.info(f"用户 {self.session.user_id} 结束收集，共收到 {len(self.images)} 张")
+        await self.bot.send_private_msg(user_id=user_id,message="下载图片中...")
+        async with self.download_lock:
+            pass
+        await self.bot.send_private_msg(user_id=user_id,message="下载完毕。")
+
+        await self.bot.send_private_msg(user_id=user_id,message="复制图片中...")
+        self.p2png_event.set()
+        async with self.copy_lock:
+            pass
+        await self.bot.send_private_msg(user_id=user_id,message="复制完毕。")
 
         images_dir = config.bot_base / "images" / self.session.user_id
         videos_dir = config.bot_base / "videos" / self.session.user_id
-        await rmPath(images_dir)
         await rmPath(videos_dir)
-        images_dir.mkdir(parents=True, exist_ok=True)
         videos_dir.mkdir(parents=True, exist_ok=True)
 
-        count = 0
-
-        for i, image in enumerate(self.images):
-            if not Path(image).exists():
-                logger.warning(f"图片 {image} 不存在，跳过")
-                continue
-
-            new_name = f"{count:05d}"
-            image_path = images_dir / new_name
-            shutil.copy2(image, image_path)
-            logger.info(f"复制图片: {image} -> {image_path}")
-            count += 1
-
-        if count == 0:
+        if len(self.images) == 0:
             await convertCleanup(self.session.user_id)
             await self.bot.send_private_msg(user_id=user_id,message="没有有效的图片被保存。")
             self.unlock()
             return
 
-        await self.bot.send_private_msg(user_id=user_id,message=f"有效保存 {count} 张图片，开始处理…")
+        logger.info(f"用户 {self.session.user_id} 结束收集，共收到 {len(self.images)} 张")
+
+        await self.bot.send_private_msg(user_id=user_id,message=f"有效保存 {len(self.images)} 张图片，开始处理…")
 
         async def _runTask():
             try:
-                await convertP2V(self.bot, str(user_id), images_dir, videos_dir)
+                await convertPng2V(self.bot, str(user_id), images_dir, videos_dir)
             except Exception:
                 pass
             finally:

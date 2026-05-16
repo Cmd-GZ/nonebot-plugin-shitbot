@@ -10,6 +10,7 @@ from nonebot.log import logger
 
 from .auxiliaries import imagesDownload
 from .session import BotSession
+from .tasks import convertP2Png
 from .command import BotCommand, BotCommandHelp, BotCommandConvert
 from .config import getConfig
 config = getConfig()
@@ -85,11 +86,13 @@ async def handleMsgConvert(bot: Bot, event: MessageEvent):
     if not session: return
     if not session.command: return
     if not isinstance(session.command, BotCommandConvert): return
-    lock = session.command.lock
+    if not session.command.if_accept_pic: return
+    lock = session.command.download_lock
     if lock is None: return
 
     async with lock:
         temp_images_dir = config.temp_dir / user_id
         temp_images_dir.mkdir(parents=True, exist_ok=True)
         async with httpx.AsyncClient() as client:
-            await imagesDownload(bot, event.reply, event.get_message(), client, temp_images_dir, session.command.images, user_id, 5)
+            await imagesDownload(bot, event.reply, event.get_message(), client, temp_images_dir, session.command.temp_images, user_id, 5)
+            session.command.p2png_event.set()

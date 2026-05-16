@@ -12,32 +12,6 @@ fi
 
 mkdir -p "$OUTDIR"
 
-# handle all the pictures in the $IMGDIR with filename dictionary sorting order
-shopt -s nullglob
-for rawfile in "$IMGDIR"/*; do
-    [ -f "$rawfile" ] || continue
-    mime=$(file --mime-type -b "$rawfile")
-    pngfile="${rawfile}.png"
-
-    case "$mime" in
-        image/png)
-	    mv "$rawfile" "$pngfile"
-	    ;;
-	image/jpeg)
-	    ffmpeg -y -i "$rawfile" -vcodec png -pix_fmt rgba -update 1 "$pngfile"
-	    rm "$rawfile"
-	    ;;
-	image/gif)
-	    ffmpeg -y -i "$rawfile" -vframes 1 -vcodec png -update 1 "$pngfile"
-	    rm "$rawfile"
-	    ;;
-	*)
-	    echo "Unsupported format: $mime, skipping."
-	    rm "$rawfile"
-	    ;;
-    esac
-done
-
 for img in "$IMGDIR"/*.png; do
     name=$(basename "$img" .png)
     output="$OUTDIR/${name}.mp4"
