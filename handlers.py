@@ -38,6 +38,7 @@ cmd_randpic = on_command("randpic", priority=1, block=True)
 @cmd_randpic.handle()
 async def handleRandpic(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
     group_id = getattr(event, 'group_id', "private")
+    if event.message_type == "private": group_id = "private"
     session = BotSession.make(str(group_id), str(event.user_id))
     command = BotCommandRandpic.make(bot, session, args)
     if not session.command:
