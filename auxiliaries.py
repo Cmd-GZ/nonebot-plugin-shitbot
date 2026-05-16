@@ -27,6 +27,19 @@ async def convertCleanup(user_id: str):
             await rmPath(path)
             logger.info(f"已删除: {path}")
 
+async def sendMsg(bot: Bot, group_id: str, user_id: str, msg: str | Message):
+    if group_id == "private":
+        try:
+            await bot.send_private_msg(user_id=int(user_id), message=msg)
+        except Exception as e:
+            logger.error(f"发送 {msg} 失败: {e}")
+        return
+    try:
+        await bot.send_group_msg(group_id=int(group_id), message=msg)
+    except Exception as e:
+        logger.error(f"发送 {msg} 失败: {e}")
+    return
+
 async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Message, client: httpx.AsyncClient, dldir: Path, store_list: asyncio.Queue[str], user_id: str, depth: int):
     reply_segs = []
     if event_reply:
