@@ -26,10 +26,12 @@ class BotSession:
         return hash((self.group_id, self.user_id))
 
     @classmethod
-    def make(cls, group_id: str, user_id: str):
-        obj = cls._objs.get((group_id, user_id))
+    def make(cls, group_id: str, user_id: str) -> BotSession:
+        key = (group_id, user_id)
+        obj = cls._objs.get(key)
         if obj: return obj
-        return cls(group_id, user_id, _internal=cls._sentinel)
+        cls._objs[key] = cls(group_id, user_id, _internal=cls._sentinel)
+        return cls._objs[key]
 
     @property
     def group_id(self) -> str:

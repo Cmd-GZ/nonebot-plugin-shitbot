@@ -1,7 +1,12 @@
 import shutil
+import httpx
+import uuid
 from pathlib import Path
+from typing import Dict, List, Optional
 
 from nonebot.log import logger
+from nonebot.adapters.onebot.v11.event import Reply
+from nonebot.adapters.onebot.v11 import Bot, Event, MessageEvent, MessageSegment, Message
 
 from .config import getConfig
 config = getConfig()
@@ -21,7 +26,7 @@ async def convertCleanup(user_id: str):
             await rmPath(path)
             logger.info(f"已删除: {path}")
 
-async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Message, client: httpx.AsyncClient, dldir: Path, user_id: str, depth: int):
+async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Message, client: httpx.AsyncClient, dldir: Path, store_list: List[str], user_id: str, depth: int):
     reply_segs = []
     if event_reply:
         reply_msgs = await bot.get_msg(message_id=event_reply.message_id)
@@ -44,7 +49,7 @@ async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Mess
                 resp = await client.get(img_url, follow_redirects=True)
                 resp.raise_for_status()
                 save_path.write_bytes(resp.content)
-                users_convert_images[user_id].append(str(save_path))
+                store_list.append(str(save_path))
                 logger.info(f"下载图片成功: {save_path}")
             except Exception as e:
                 logger.error(f"下载图片失败 {img_url}: {e}")
@@ -57,7 +62,7 @@ async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Mess
             try:
                 reply_msg = await bot.get_msg(message_id=msg_id)
                 reply_segs = Message([MessageSegment(seg['type'], seg['data']) for seg in reply_msg['message']])
-                await imagesDownload(bot, None, reply_segs, client, dldir, user_id, depth - 1)
+                await imagesDownload(bot, None, reply_segs, client, dldir, store_list, user_id, depth - 1)
             except Exception as e:
                 logger.error(f"获取引用消息失败 (ID: {msg_id}): {e}")
                 continue
@@ -76,5 +81,5 @@ async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Mess
 
             for forward_msg in forward_msgs:
                 message_segs = Message([MessageSegment(seg['type'], seg['data']) for seg in forward_msg.get('message', [])])
-                await imagesDownload(bot, None, Message(message_segs), client, dldir, user_id, depth - 1)
+                await imagesDownload(bot, None, Message(message_segs), client, dldir, store_list, user_id, depth - 1)
             continue
