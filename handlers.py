@@ -11,7 +11,7 @@ from nonebot.log import logger
 from .auxiliaries import imagesDownload
 from .session import BotSession
 from .tasks import convertP2Png
-from .command import BotCommand, BotCommandHelp, BotCommandConvert
+from .command import BotCommand, BotCommandHelp, BotCommandConvert, BotCommandRandpic
 from .config import getConfig
 config = getConfig()
 
@@ -23,6 +23,23 @@ async def handleCmdHelp(bot: Bot, event: MessageEvent, args: Message = CommandAr
     if event.message_type != "private": return
     session = BotSession.make("private", str(event.user_id))
     command = BotCommandHelp.make(bot, session, args)
+    if not session.command:
+        tip = "未知错误: 会话command字段为None"
+        await cmd_help.finish(tip)
+    if not command:
+        tip =  "错误：会话被占用\n"
+        tip += f"命令 {session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+        await cmd_help.finish(tip)
+
+    await command.run()
+    await cmd_help.finish()
+
+cmd_randpic = on_command("randpic", priority=1, block=True)
+@cmd_randpic.handle()
+async def handleRandpic(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
+    group_id = getattr(event, 'group_id', "private")
+    session = BotSession.make(str(group_id), str(event.user_id))
+    command = BotCommandRandpic.make(bot, session, args)
     if not session.command:
         tip = "未知错误: 会话command字段为None"
         await cmd_help.finish(tip)

@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING
 
 import asyncio
 import shutil
+import uuid
+import httpx
 from typing import Dict, List, Optional
 from pathlib import Path
 
@@ -244,3 +246,57 @@ class BotCommandConvert(BotCommand):
 
         asyncio.create_task(_runTask())
         return
+
+
+class BotCommandRandpic(BotCommand):
+    def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
+        super().__init__(bot, session, args, _internal=_internal)
+        self._name = "randpic"
+
+    async def run(self):
+        if not self.session: return
+        if len(self.argv) >= 2 or (len(self.argv) >= 1 and self.argv[0] not in ["able", "unable"]):
+            tip =  "命令格式错误。\n"
+            tip += "输入 /help randpic 查看使用方法."
+            await self._send_msg(tip)
+            self.unlock()
+            return
+
+        if len(self.argv) >= 1 and self.argv[0] == "able" and self.session.group_id != "private":
+            tip = "该功能只能在私聊中使用"
+            await self._send_msg(tip)
+            self.unlock()
+            return
+        pass
+
+        if not self.argv or len(self.argv) == 0 or (len(self.argv) >=1 and self.argv[0] == "unable"):
+            api = "https://manyacg.top/setu"
+        else:
+            api = "https://manyacg.top/sese"
+
+        images_dir = config.bot_base / "images" / self.session.user_id
+        if self.session.group_id != "private":
+            images_dir = config.bot_base / "images" / self.session.group_id / self.session.user_id
+        await rmPath(images_dir)
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_name = f"{uuid.uuid4().hex}"
+        save_path = images_dir / safe_name
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(api, follow_redirects=True)
+                resp.raise_for_status()
+                save_path.write_bytes(resp.content)
+                logger.info(f"下载图片成功: {save_path}")
+            except Exception as e:
+                logger.error(f"下载图片失败 {api}: {e}")
+
+        try:
+            client_path = config.client_base / save_path.relative_to(config.bot_base)
+            await self._send_msg(Message(MessageSegment.image(f"file://{client_path}")))
+            logger.info(f"发送图片成功: {client_path}")
+        except Exception as e:
+            logger.error(f"发送 {save_path.name} 失败: {e}")
+            await self._send_msg(f"图片发送失败：{e}")
+
+        self.unlock()
