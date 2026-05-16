@@ -62,9 +62,7 @@ class BotCommand:
         self._argv = args.extract_plain_text().strip().split()
 
     async def run(self):
-        if not self.session:
-            self.unlock()
-            return
+        if not self.session: return
         if not self.session.group_id == "private":
             self.unlock()
             return
@@ -82,9 +80,7 @@ class BotCommandHelp(BotCommand):
         self._name = "help"
 
     async def run(self):
-        if not self.session:
-            self.unlock()
-            return
+        if not self.session: return
         if not self.session.group_id == "private":
             self.unlock()
             return
@@ -177,9 +173,7 @@ class BotCommandConvert(BotCommand):
         self._event.set()
 
     async def run(self):
-        if not self.session:
-            self.unlock()
-            return
+        if not self.session: return
         if not self.session.group_id == "private":
             self.unlock()
             return
@@ -300,3 +294,81 @@ class BotCommandRandpic(BotCommand):
             await self._send_msg(f"图片发送失败：{e}")
 
         self.unlock()
+
+
+class BotCommandShitpost(BotCommand):
+    def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
+        super().__init__(bot, session, args, _internal=_internal)
+        self._name = "shitpost"
+        self._is_forwardable = False
+        self._groups = []
+        self._event = asyncio.Event()
+
+    @property
+    def is_forwardable(self):
+        return self._is_forwardable
+
+    @property
+    def groups(self):
+        return self._groups
+
+    @property
+    def event(self):
+        return self._event
+
+    async def setArgv(self, args: Message):
+        if not self.session: return
+        new_argv = args.extract_plain_text().strip().split()
+
+        if not new_argv or len(new_argv) == 0 or new_argv[0] not in ["start", "stop"] or (new_argv[0] == "start" and len(new_argv) <= 1) or (new_argv[0] == "start" and any(not arg.isdigit() for arg in new_argv[1:])):
+            tip =  "命令格式错误。\n"
+            tip += "输入 /help shitpost 查看使用方法。"
+            await self._send_msg(tip)
+            return
+
+
+        if new_argv[0] == "start":
+            tip =  "错误：会话被占用\n"
+            tip += f"命令 {self.session.command} 正在运行，进行下一步前请先终止它或等待其完成。"
+            await self._send_msg(tip)
+            return
+
+        self._argv = new_argv
+        self._event.set()
+
+    async def run(self):
+        if not self.session: return
+
+        if not self.argv or len(self.argv) == 0 or self.argv[0] not in ["start", "stop"] or (self.argv[0] == "start" and len(self.argv) <= 1) or (self.argv[0] == "start" and any(not arg.isdigit() for arg in self.argv[1:])):
+            tip =  "命令格式错误。\n"
+            tip += "输入 /help shitpost 查看使用方法。"
+            await self._send_msg(tip)
+            self.unlock()
+            return
+
+        if self.argv[0] == "stop":
+            tip =  "错误：会话未开始"
+            tip += "我还没吃上呢你着急啥，先输入 /shitpost start [群号] 开始搬石。"
+            await self._send_msg(tip)
+            self.unlock()
+            return
+
+        groups = [int(arg) for arg in self.argv[1:]]
+        exist_groups = await self.bot.get_group_list()
+        for group in groups:
+            if all(group != exist_group['group_id'] for exist_group in exist_groups):
+                tip =  "错误：存在未知群号\n"
+                tip += f"Bot 未在 {group} 中，请检查输入是否正确。"
+                await self._send_msg(tip)
+                self.unlock()
+                return
+
+        self._groups = groups
+        self._is_forwardable = True
+        await self._send_msg("消息转发已开启，请将你要搬的史发给我。")
+        await self.event.wait()
+
+        self._is_forwardable = False
+        await self._send_msg("豪赤，下回要搬的时候记得再叫我。")
+        self.unlock()
+        return
