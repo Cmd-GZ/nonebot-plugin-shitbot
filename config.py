@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Optional
 import yaml
 from pydantic import BaseModel
+from typing import Dict, List, Optional
 
 class ShitBotConfig(BaseModel):
     bot_base: Path
@@ -9,6 +10,8 @@ class ShitBotConfig(BaseModel):
     script_png2v_path: Path
     script_p2png_path: Path
     temp_dir: Path
+    whitelist_groups_setu: List[str]
+    whitelist_users_setu: List[str]
 
     class Config:
         arbitrary_types_allowed = True

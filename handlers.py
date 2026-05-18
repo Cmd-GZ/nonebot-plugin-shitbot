@@ -7,6 +7,7 @@ from nonebot.adapters.onebot.v11.event import Reply
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.log import logger
+from nonebot.adapters.onebot.v11.exception import ActionFailed
 
 from .auxiliaries import imagesDownload
 from .session import BotSession
@@ -20,8 +21,9 @@ config = getConfig()
 cmd_help = on_command("help", priority=1, block=True)
 @cmd_help.handle()
 async def handleCmdHelp(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
-    if event.message_type != "private": return
-    session = BotSession.make("private", str(event.user_id))
+    group_id = getattr(event, 'group_id', "private")
+    if event.message_type == "private": group_id = "private"
+    session = BotSession.make(str(group_id), str(event.user_id))
     command = BotCommandHelp.make(bot, session, args)
     if not session.command:
         tip = "未知错误: 会话command字段为None"
@@ -114,7 +116,7 @@ async def handleCmdOtherwise(bot: Bot, event: MessageEvent):
     await cmd_help.finish()
 
 
-
+# ===Messages handlers=== #
 
 
 msg_convert = on_message(priority=10, block=False)
@@ -149,5 +151,34 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
     if not isinstance(session.command, BotCommandShitpost): return
     if not session.command.is_forwardable: return
 
+    async def _send(group: int, maxtry: int):
+        for i in range(maxtry):
+            try:
+                await bot.send_group_msg(group_id=group, message=event.get_message())
+                return
+            except ActionFailed as e:
+                if i >= maxtry - 1: raise
+                await asyncio.sleep(0.25)
+
+
     for group in session.command.groups:
-        asyncio.create_task(bot.send_group_msg(group_id=group, message=event.get_message()))
+        asyncio.create_task(_send(group, 3))
+
+
+# Simple auto reply, just for fun :). May be reconstructed in fucture.
+msg_autoreply = on_message(priority=10, block=False)
+@msg_autoreply.handle()
+async def handleMsgAutoreply(bot: Bot, event: MessageEvent):
+    group_id = getattr(event, 'group_id', "private")
+    if event.message_type == "private": group_id = "private"
+    user_id = str(event.user_id)
+
+    for seg in event.get_message():
+        if seg.type != "text": continue
+        text = seg.data.get('text', "")
+        if text.replace("!", "").replace(" ", "").replace("！", "").replace("w", "").replace("我", "") in ["csn", "草死你", "操死你", "🌿死你", "艹死你", "zjsncsn"]:
+            await sendMsg(bot, group_id, user_id, Message(MessageSegment.image(f"file://{config.client_base / "wcsn.jpg"}")))
+            return
+        if text.replace("?", "").replace(" ", "").replace("？", "") in ["这是你吗", "zsnm", "是你吗"]:
+            await sendMsg(bot, group_id, user_id, "是我。")
+            return

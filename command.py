@@ -81,12 +81,11 @@ class BotCommandHelp(BotCommand):
 
     async def run(self):
         if not self.session: return
-        if not self.session.group_id == "private":
-            self.unlock()
-            return
         tip =  "使用方法：\n"
         tip += "  /help          显示帮助\n"
         tip += "  /convert       收集图片并批量转换为视频\n"
+        tip += "  /randpic       随机发送二次元图片\n"
+        tip += "  /shitpost      转发信息到多个群聊中"
         tip += "\n"
         tip += "使用例子：\n"
         tip += "  /help help"
@@ -97,19 +96,31 @@ class BotCommandHelp(BotCommand):
             return
 
         if self.argv[0] == "help":
-            tip =  "/help:           显示帮助\n"
-            tip += "命令格式：\n"
-            tip += "  /help          显示基础帮助\n"
-            tip += "  /help <命令>   显示<命令>的使用方法\n"
-            tip += "\n"
-            tip += "使用例子：\n"
+            tip =  "/help:           显示帮助\n\n"
+            tip += "命令格式：\n\n"
+            tip += "  /help          显示基础帮助\n\n"
+            tip += "  /help <命令>   显示<命令>的使用方法\n\n"
+            tip += "\n\n"
+            tip += "使用例子：\n\n"
             tip += "  /help convert  获取 /convert 命令的使用方法"
 
         if self.argv[0] == "convert":
-            tip =  "/convert:        收集图片并批量转换为视频\n"
-            tip += "命令格式：\n"
-            tip += "  /convert start 令 Bot 保存在提示出现后你接下来发送的图片，直至你输入 /convert stop \n"
+            tip =  "/convert:        收集图片并批量转换为视频（仅私聊可用）\n\n"
+            tip += "命令格式：\n\n"
+            tip += "  /convert start 令 Bot 保存在提示出现后你接下来发送的图片，直至你输入 /convert stop \n\n"
             tip += "  /convert stop  在输入 /convert start 并发送图片后输入， Bot 将停止保存你发送的图片，转而将收集到的图片按顺序转换为视频发送，最后打包发送一个 tar 归档。"
+
+        if self.argv[0] == "randpic":
+            tip =  "/randpic:        随机发送二次元图片\n\n"
+            tip += "命令格式：\n\n"
+            tip += "  /randpic unable 或 /randpic: 从受限API中随机获取一张二次元图片并发送 \n\n"
+            tip += "  /randpic able stop: 从不受限API中随机获取一张二次元图片并发送（仅私聊可用）"
+
+        if self.argv[0] == "shitpost":
+            tip =  "/shitpost:        转发信息到多个群聊中（仅私聊可用）\n\n"
+            tip += "命令格式：\n\n"
+            tip += "  /convert start <群号1> <群号2> ...:  令 Bot 转发在提示出现后你接下来发送的信息到你指定的群聊，直至你输入 /shitpost stop \n\n"
+            tip += "  /shitpost stop  在输入 /shitpost start 后输入， Bot将停止转发你的信息"
 
         await self._send_msg(tip)
 
@@ -262,11 +273,18 @@ class BotCommandRandpic(BotCommand):
             await self._send_msg(tip)
             self.unlock()
             return
-        pass
+
+
+        if self.session.group_id not in config.whitelist_groups_setu:
+            self.unlock()
+            return
 
         if not self.argv or len(self.argv) == 0 or (len(self.argv) >=1 and self.argv[0] == "unable"):
             api = "https://manyacg.top/setu"
         else:
+            if self.session.user_id not in config.whitelist_users_setu:
+                self.unlock()
+                return
             api = "https://manyacg.top/sese"
 
         images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
