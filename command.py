@@ -24,12 +24,12 @@ if TYPE_CHECKING:
 
 class BotCommand:
     _sentinel = object()
+    _name = "otherwise"
     # DON'T FUCKING CALL ME!
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
         if _internal is not self._sentinel: raise TypeError("Please use BotCommand.make() instead of BotCommand()")
         self._bot = bot
         self._session = session
-        self._name = "otherwise"
         self._argv = args.extract_plain_text().strip().split()
         session.command = self
 
@@ -37,6 +37,10 @@ class BotCommand:
     def make(cls, bot: Bot, session: BotSession, args: Message=Message()) -> BotCommand | None:
         if session.command: return None
         return cls(bot, session, args, _internal=cls._sentinel)
+
+    @classmethod
+    def getName(cls):
+        return cls._name
 
     @property
     def bot(self):
@@ -54,33 +58,79 @@ class BotCommand:
     def argv(self):
         return self._argv
 
+    # Return a list with the truth values of arguments where i-th element is true if and only if the format of arguments conform the i-th expression
+    # if necessary, implement it in the subclass like:
+    #    return [
+    #        <the expression of the first case>,
+    #        <the expression of the second case>,
+    #        ...
+    #    ]
+    def _ifLegalGrammars(self, argv: List[str]):
+        return [True]
+
+    # Judge if the arugments is legal based on the truthvalues and send msg if it's illegal
+    async def _legalCase(self, truthvalues: List[bool]):
+        if any(truthvalues): return True
+
+        tip =  "命令格式错误。\n"
+        tip += f"输入 /help {self.name} 查看使用方法."
+        await self._send_msg(tip)
+        return False
+
     async def _send_msg(self, msg: str | Message):
         if not self.session: return
         await sendMsg(self.bot, self.session.group_id, self.session.user_id, msg)
 
+    # Change the status of the running command
     async def setArgv(self, args: Message):
-        self._argv = args.extract_plain_text().strip().split()
-
-    async def run(self):
         if not self.session: return
+        if not self.session.command: return
+        tip =  "错误：会话被占用\n"
+        tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+        await self._send_msg(tip)
+        return
+
+    # Main function
+    async def run(self):
+        if not self.session:
+            self.unlock()
+            return
         if not self.session.group_id == "private":
             self.unlock()
             return
         await self._send_msg(f"无效命令，请输入/help获取帮助。")
         self.unlock()
 
+    # Disconnect with the session, you should call in run() before return
     def unlock(self):
         if self.session: self.session.command = None
         self._session = None
 
 
 class BotCommandHelp(BotCommand):
+    _name = "help"
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
         super().__init__(bot, session, args, _internal=_internal)
-        self._name = "help"
+
+    def _ifLegalGrammars(self, argv: List[str]):
+        return [
+            len(argv) == 0, # /help
+            len(argv) >= 1 and argv[0] == "help", # /help help ...
+            len(argv) >= 1 and argv[0] == "convert", # /help convert ...
+            len(argv) >= 1 and argv[0] == "randpic", # /help randpic ...
+            len(argv) >= 1 and argv[0] == "shitpost", # /help shitpost ...
+            True, # /help ...
+        ]
 
     async def run(self):
         if not self.session: return
+
+        truthvalues = self._ifLegalGrammars(self.argv)
+        # I know it's impossble to be true. Just for formalism :)
+        if not await self._legalCase(truthvalues):
+            self.unlock()
+            return
+
         tip =  "使用方法：\n"
         tip += "  /help          显示帮助\n"
         tip += "  /convert       收集图片并批量转换为视频\n"
@@ -90,12 +140,7 @@ class BotCommandHelp(BotCommand):
         tip += "使用例子：\n"
         tip += "  /help help"
 
-        if not self.argv:
-            await self._send_msg(tip)
-            self.unlock()
-            return
-
-        if self.argv[0] == "help":
+        if truthvalues[1]:
             tip =  "/help:           显示帮助\n\n"
             tip += "命令格式：\n\n"
             tip += "  /help          显示基础帮助\n\n"
@@ -104,33 +149,32 @@ class BotCommandHelp(BotCommand):
             tip += "使用例子：\n\n"
             tip += "  /help convert  获取 /convert 命令的使用方法"
 
-        if self.argv[0] == "convert":
+        if truthvalues[2]:
             tip =  "/convert:        收集图片并批量转换为视频（仅私聊可用）\n\n"
             tip += "命令格式：\n\n"
             tip += "  /convert start 令 Bot 保存在提示出现后你接下来发送的图片，直至你输入 /convert stop \n\n"
             tip += "  /convert stop  在输入 /convert start 并发送图片后输入， Bot 将停止保存你发送的图片，转而将收集到的图片按顺序转换为视频发送，最后打包发送一个 tar 归档。"
 
-        if self.argv[0] == "randpic":
+        if truthvalues[3]:
             tip =  "/randpic:        随机发送二次元图片\n\n"
             tip += "命令格式：\n\n"
             tip += "  /randpic unable 或 /randpic: 从受限API中随机获取一张二次元图片并发送 \n\n"
             tip += "  /randpic able stop: 从不受限API中随机获取一张二次元图片并发送（仅私聊可用）"
 
-        if self.argv[0] == "shitpost":
+        if truthvalues[4]:
             tip =  "/shitpost:        转发信息到多个群聊中（仅私聊可用）\n\n"
             tip += "命令格式：\n\n"
             tip += "  /convert start <群号1> <群号2> ...:  令 Bot 转发在提示出现后你接下来发送的信息到你指定的群聊，直至你输入 /shitpost stop \n\n"
             tip += "  /shitpost stop  在输入 /shitpost start 后输入， Bot将停止转发你的信息"
 
         await self._send_msg(tip)
-
         self.unlock()
 
 
 class BotCommandConvert(BotCommand):
+    _name = "convert"
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
         super().__init__(bot, session, args, _internal=_internal)
-        self._name = "convert"
         self._event = asyncio.Event()
         self._p2png_event = asyncio.Event()
         self._if_accept_pic = False
@@ -163,17 +207,20 @@ class BotCommandConvert(BotCommand):
     def copy_lock(self):
         return self._copy_lock
 
+    def _ifLegalGrammars(self, argv: List[str]):
+        return [
+            len(argv) == 1 and argv[0] == "start", # /convert start
+            len(argv) == 1 and argv[0] == "stop", # /convert stop
+        ]
+
     async def setArgv(self, args: Message):
         if not self.session: return
         new_argv = args.extract_plain_text().strip().split()
-
-        if not new_argv or len(new_argv) != 1 or (new_argv[0] != "start" and new_argv[0] != "stop"):
-            tip =  "命令格式错误。\n"
-            tip += "输入 /help convert 查看使用方法."
-            await self._send_msg(tip)
+        truthvalues = self._ifLegalGrammars(new_argv)
+        if not await self._legalCase(truthvalues):
             return
 
-        if new_argv[0] == "start":
+        if truthvalues[0]:
             if not self.session.command: return
             tip =  "错误：会话被占用\n"
             tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
@@ -190,16 +237,12 @@ class BotCommandConvert(BotCommand):
             self.unlock()
             return
 
-        user_id = int(self.session.user_id)
-
-        if not self.argv or len(self.argv) != 1 or (self.argv[0] != "start" and self.argv[0] != "stop"):
-            tip =  "命令格式错误。\n"
-            tip += "输入 /help convert 查看使用方法."
-            await self._send_msg(tip)
+        truthvalues = self._ifLegalGrammars(self.argv)
+        if not await self._legalCase(truthvalues):
             self.unlock()
             return
 
-        if self.argv[0] == "stop":
+        if truthvalues[1]:
             tip =  "错误：会话未开始\n"
             tip += f"你还没有开始收集图片，请先使用 /convert start 。"
             await self._send_msg(tip)
@@ -207,6 +250,8 @@ class BotCommandConvert(BotCommand):
             return
 
         # Now self.argv == ["start"]
+        user_id = int(self.session.user_id)
+
         logger.info(f"用户 {self.session.user_id} 开始了图片收集")
         await self._send_msg("图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。")
         self._if_accept_pic = True
@@ -255,20 +300,26 @@ class BotCommandConvert(BotCommand):
 
 
 class BotCommandRandpic(BotCommand):
+    _name = "randpic"
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
         super().__init__(bot, session, args, _internal=_internal)
-        self._name = "randpic"
+
+    def _ifLegalGrammars(self, argv: List[str]):
+        return [
+            len(argv) == 0, # /randpic
+            len(argv) == 1 and argv[0] == "unable", # /randpic unable
+            len(argv) == 1 and argv[0] == "able", # /randpic able
+        ]
 
     async def run(self):
         if not self.session: return
-        if len(self.argv) >= 2 or (len(self.argv) >= 1 and self.argv[0] not in ["able", "unable"]):
-            tip =  "命令格式错误。\n"
-            tip += "输入 /help randpic 查看使用方法."
-            await self._send_msg(tip)
+
+        truthvalues = self._ifLegalGrammars(self.argv)
+        if not await self._legalCase(truthvalues):
             self.unlock()
             return
 
-        if len(self.argv) >= 1 and self.argv[0] == "able" and self.session.group_id != "private":
+        if truthvalues[2] and self.session.group_id != "private":
             tip = "该功能只能在私聊中使用"
             await self._send_msg(tip)
             self.unlock()
@@ -313,9 +364,9 @@ class BotCommandRandpic(BotCommand):
 
 
 class BotCommandShitpost(BotCommand):
+    _name = "shitpost"
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
         super().__init__(bot, session, args, _internal=_internal)
-        self._name = "shitpost"
         self._is_forwardable = False
         self._groups = []
         self._event = asyncio.Event()
@@ -332,18 +383,21 @@ class BotCommandShitpost(BotCommand):
     def event(self):
         return self._event
 
+    def _ifLegalGrammars(self, argv: List[str]):
+        return [
+            len(argv) >= 2 and argv[0] == "start" and all(arg.isdigit() for arg in argv[1:]), # /shitpost start [<group_id>]
+            len(argv) == 1 and argv[0] == "stop", # /shitpost stop
+        ]
+
     async def setArgv(self, args: Message):
         if not self.session: return
         new_argv = args.extract_plain_text().strip().split()
-
-        if not new_argv or len(new_argv) == 0 or new_argv[0] not in ["start", "stop"] or (new_argv[0] == "start" and len(new_argv) <= 1) or (new_argv[0] == "start" and any(not arg.isdigit() for arg in new_argv[1:])):
-            tip =  "命令格式错误。\n"
-            tip += "输入 /help shitpost 查看使用方法。"
-            await self._send_msg(tip)
+        truthvalues = self._ifLegalGrammars(new_argv)
+        if not await self._legalCase(truthvalues):
             return
 
 
-        if new_argv[0] == "start":
+        if truthvalues[0]:
             if not self.session.command: return
             tip =  "错误：会话被占用\n"
             tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
@@ -356,16 +410,14 @@ class BotCommandShitpost(BotCommand):
     async def run(self):
         if not self.session: return
 
-        if not self.argv or len(self.argv) == 0 or self.argv[0] not in ["start", "stop"] or (self.argv[0] == "start" and len(self.argv) <= 1) or (self.argv[0] == "start" and any(not arg.isdigit() for arg in self.argv[1:])):
-            tip =  "命令格式错误。\n"
-            tip += "输入 /help shitpost 查看使用方法。"
-            await self._send_msg(tip)
+        truthvalues = self._ifLegalGrammars(self.argv)
+        if not await self._legalCase(truthvalues):
             self.unlock()
             return
 
-        if self.argv[0] == "stop":
+        if truthvalues[1]:
             tip =  "错误：会话未开始"
-            tip += "我还没吃上呢你着急啥，先输入 /shitpost start [群号] 开始搬石。"
+            tip += "我还没吃上呢你着急啥，先输入 /shitpost start <群号1> <群号2> ... 开始搬石。"
             await self._send_msg(tip)
             self.unlock()
             return
