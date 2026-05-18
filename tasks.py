@@ -65,7 +65,7 @@ async def convertPng2V(bot: Bot, user_id: str, img_dir: Path, video_dir: Path):
                 logger.error(f"发送 {video_file.name} 失败: {e}")
                 await bot.send_private_msg(user_id=user_id_int, message=f"发送 {video_file.name} 失败: {e}")
 
-        tar_path = config.bot_base / f"{user_id}.tar"
+        tar_path = config.bot_base / "private" / user_id / f"{user_id}.tar"
         with tarfile.open(tar_path, "w") as tar:
             for video_file in videos:
                 tar.add(video_file, arcname=video_file.name)
@@ -86,7 +86,7 @@ async def convertP2Png(command: BotCommandConvert):
     temp_images = command.temp_images
     images = command.images
     user_id = int(command.session.user_id)
-    output_dir = config.bot_base/ "images" / command.session.user_id
+    output_dir = config.bot_base/ "private" / command.session.user_id / "images"
     await rmPath(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     if_the_last = 0

@@ -131,7 +131,7 @@ async def handleMsgConvert(bot: Bot, event: MessageEvent):
     if lock is None: return
 
     async with lock:
-        temp_images_dir = config.temp_dir / user_id
+        temp_images_dir = config.bot_base / "private" / user_id / "temp"
         temp_images_dir.mkdir(parents=True, exist_ok=True)
         async with httpx.AsyncClient() as client:
             await imagesDownload(bot, event.reply, event.get_message(), client, temp_images_dir, session.command.temp_images, user_id, 5)

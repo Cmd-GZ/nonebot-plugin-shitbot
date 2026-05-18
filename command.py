@@ -215,13 +215,13 @@ class BotCommandConvert(BotCommand):
             pass
         await self._send_msg("复制完毕。")
 
-        images_dir = config.bot_base / "images" / self.session.user_id
-        videos_dir = config.bot_base / "videos" / self.session.user_id
+        images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
+        videos_dir = config.bot_base / self.session.group_id / self.session.user_id / "videos"
         await rmPath(videos_dir)
         videos_dir.mkdir(parents=True, exist_ok=True)
 
         if len(self.images) == 0:
-            await convertCleanup(self.session.user_id)
+            await convertCleanup(self.session.group_id, self.session.user_id)
             await self._send_msg("没有有效的图片被保存。")
             self.unlock()
             return
@@ -236,7 +236,7 @@ class BotCommandConvert(BotCommand):
             except Exception:
                 pass
             finally:
-                if self.session: await convertCleanup(self.session.user_id)
+                if self.session: await convertCleanup(self.session.group_id, self.session.user_id)
                 self.unlock()
 
         asyncio.create_task(_runTask())
@@ -269,9 +269,7 @@ class BotCommandRandpic(BotCommand):
         else:
             api = "https://manyacg.top/sese"
 
-        images_dir = config.bot_base / "images" / self.session.user_id
-        if self.session.group_id != "private":
-            images_dir = config.bot_base / "images" / self.session.group_id / self.session.user_id
+        images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
         await rmPath(images_dir)
         images_dir.mkdir(parents=True, exist_ok=True)
 
@@ -294,6 +292,7 @@ class BotCommandRandpic(BotCommand):
             logger.error(f"发送 {save_path.name} 失败: {e}")
             await self._send_msg(f"图片发送失败：{e}")
 
+        await rmPath(images_dir)
         self.unlock()
 
 

@@ -17,11 +17,11 @@ async def rmPath(path: Path):
     if path.is_dir(): shutil.rmtree(path)
     if path.is_file(): path.unlink()
 
-async def convertCleanup(user_id: str):
-    images_dir = config.bot_base / "images" / user_id
-    videos_dir = config.bot_base / "videos" / user_id
-    tar_path = config.bot_base / f"{user_id}.tar"
-    temp_dir = config.temp_dir  / user_id
+async def convertCleanup(group_id: str, user_id: str):
+    images_dir = config.bot_base / group_id / user_id / "images"
+    videos_dir = config.bot_base / group_id / user_id / "videos"
+    tar_path = config.bot_base / group_id / user_id / f"{user_id}.tar"
+    temp_dir = config.bot_base / group_id / user_id / "temp"
 
     for path in [images_dir, videos_dir, tar_path, temp_dir]:
             await rmPath(path)
