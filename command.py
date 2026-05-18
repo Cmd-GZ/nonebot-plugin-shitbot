@@ -14,7 +14,7 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.log import logger
 
-from .auxiliaries import rmPath, convertCleanup, sendMsg
+from .auxiliaries import rmPath, convertCleanup, sendMsg, stuffDownload
 from .tasks import convertPng2V, convertP2Png
 from .config import getConfig
 config = getConfig()
@@ -272,14 +272,12 @@ class BotCommandRandpic(BotCommand):
         images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
         await rmPath(images_dir)
         images_dir.mkdir(parents=True, exist_ok=True)
-
         safe_name = f"{uuid.uuid4().hex}"
         save_path = images_dir / safe_name
+
         async with httpx.AsyncClient() as client:
             try:
-                resp = await client.get(api, follow_redirects=True)
-                resp.raise_for_status()
-                save_path.write_bytes(resp.content)
+                await stuffDownload(client, api, save_path)
                 logger.info(f"下载图片成功: {save_path}")
             except Exception as e:
                 logger.error(f"下载图片失败 {api}: {e}")

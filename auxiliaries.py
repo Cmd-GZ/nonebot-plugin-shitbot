@@ -40,6 +40,13 @@ async def sendMsg(bot: Bot, group_id: str, user_id: str, msg: str | Message):
         logger.error(f"发送 {msg} 失败: {e}")
     return
 
+async def stuffDownload(client: httpx.AsyncClient, url: str | httpx.URL, output_path: Path):
+    resp = await client.get(url, follow_redirects=True)
+    resp. raise_for_status()
+    output_path.write_bytes(resp.content)
+
+
+
 async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Message, client: httpx.AsyncClient, dldir: Path, store_list: asyncio.Queue[str], user_id: str, depth: int):
     reply_segs = []
     if event_reply:
