@@ -15,4 +15,5 @@
 - P站图片获取
 
 ## 鸣谢
-- [ManyACG](manyacg.top): 为随机涩图提供了API
+
+- [ManyACG](https://manyacg.top): 为随机涩图提供了API
