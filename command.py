@@ -163,8 +163,9 @@ class BotCommandConvert(BotCommand):
             return
 
         if new_argv[0] == "start":
+            if not self.session.command: return
             tip =  "错误：会话被占用\n"
-            tip += f"命令 {self.session.command} 正在运行，进行下一步前请先终止它或等待其完成。"
+            tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
             await self._send_msg(tip)
             return
 
@@ -328,8 +329,9 @@ class BotCommandShitpost(BotCommand):
 
 
         if new_argv[0] == "start":
+            if not self.session.command: return
             tip =  "错误：会话被占用\n"
-            tip += f"命令 {self.session.command} 正在运行，进行下一步前请先终止它或等待其完成。"
+            tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
             await self._send_msg(tip)
             return
 

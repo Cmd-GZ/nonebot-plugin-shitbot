@@ -150,4 +150,4 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
     if not session.command.is_forwardable: return
 
     for group in session.command.groups:
-        await bot.send_group_msg(group_id=group, message=event.get_message())
+        asyncio.create_task(bot.send_group_msg(group_id=group, message=event.get_message()))
