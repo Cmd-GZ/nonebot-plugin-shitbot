@@ -127,7 +127,10 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
                 await bot.send_group_msg(group_id=group, message=event.get_message())
                 return
             except ActionFailed as e:
-                if i >= maxtry - 1: raise
+                if i >= maxtry - 1:
+                    logger.error(f"转发失败:{e}")
+                    return
+                logger.error(f"转发失败，准备第{i + 1}次重试")
                 await asyncio.sleep(0.25)
 
 
