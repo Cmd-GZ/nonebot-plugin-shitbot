@@ -7,7 +7,7 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.adapters.onebot.v11.exception import ActionFailed
 
-from .auxiliaries import imagesDownload, sendMsg
+from .auxiliaries import sendMsg, getImagesUrl, stuffDownload
 from .session import BotSession
 from .command import *
 from .config import getConfig
@@ -23,8 +23,13 @@ def getSubClses(cls: type):
 command_classes = getSubClses(BotCommand) + [BotCommand]
 
 async def cmdHandler(bot: Bot, matcher: type[Matcher], event: MessageEvent, cmd_cls: type, args: Message, *, only: str | None = None):
-    if only is not None and only != event.message_type: return
     if cmd_cls not in command_classes: return
+
+    if only is not None and only != event.message_type:
+        tip = f"该功能只能在 {only} 下使用"
+        if only == "private": tip = f"该功能只能在私聊中使用"
+        if only == "group": tip = f"该功能只能在群聊中使用"
+        await matcher.finish(tip)
 
     group_id = str(getattr(event, 'group_id', "private"))
     if event.message_type == "private": group_id = "private"
@@ -66,9 +71,9 @@ cmd_help = cmdRegister("help", BotCommandHelp)
 
 cmd_randpic = cmdRegister("randpic", BotCommandRandpic)
 
-cmd_convert = cmdRegister("convert", BotCommandConvert)
+cmd_convert = cmdRegister("convert", BotCommandConvert, only="private")
 
-cmd_shitpost = cmdRegister("shitpost", BotCommandShitpost)
+cmd_shitpost = cmdRegister("shitpost", BotCommandShitpost, only="private")
 
 cmd_otherwise = cmdRegister("", BotCommand, priority=2)
 
@@ -92,7 +97,16 @@ async def handleMsgConvert(bot: Bot, event: MessageEvent):
         temp_images_dir = config.bot_base / "private" / user_id / "temp"
         temp_images_dir.mkdir(parents=True, exist_ok=True)
         async with httpx.AsyncClient() as client:
-            await imagesDownload(bot, event.reply, event.get_message(), client, temp_images_dir, session.command.temp_images, user_id, 5)
+            url_list = await getImagesUrl(bot, event.reply, event.get_message(), 5)
+            for url in url_list:
+                safe_name = f"{uuid.uuid4().hex}"
+                save_path = temp_images_dir / safe_name
+                try:
+                    await stuffDownload(client, url, save_path)
+                    await session.command.temp_images.put(str(save_path))
+                    logger.info(f"下载图片成功: {save_path}")
+                except Exception as e:
+                    logger.error(f"下载图片失败 {url}: {e}")
             session.command.p2png_event.set()
 
 

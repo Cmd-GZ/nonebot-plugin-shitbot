@@ -159,7 +159,7 @@ class BotCommandHelp(BotCommand):
             tip =  "/randpic:        随机发送二次元图片\n\n"
             tip += "命令格式：\n\n"
             tip += "  /randpic unable 或 /randpic: 从受限API中随机获取一张二次元图片并发送 \n\n"
-            tip += "  /randpic able stop: 从不受限API中随机获取一张二次元图片并发送（仅私聊可用）"
+            tip += "  /randpic able: 从不受限API中随机获取一张二次元图片并发送（仅私聊可用）"
 
         if truthvalues[4]:
             tip =  "/shitpost:        转发信息到多个群聊中（仅私聊可用）\n\n"
@@ -233,9 +233,6 @@ class BotCommandConvert(BotCommand):
 
     async def run(self):
         if not self.session: return
-        if not self.session.group_id == "private":
-            self.unlock()
-            return
 
         truthvalues = self._ifLegalGrammars(self.argv)
         if not await self._legalCase(truthvalues):
@@ -330,7 +327,7 @@ class BotCommandRandpic(BotCommand):
             self.unlock()
             return
 
-        if not self.argv or len(self.argv) == 0 or (len(self.argv) >=1 and self.argv[0] == "unable"):
+        if not truthvalues[1]:
             api = "https://manyacg.top/setu"
         else:
             if self.session.user_id not in config.whitelist_users_setu:

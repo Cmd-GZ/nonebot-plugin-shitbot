@@ -17,6 +17,7 @@ async def rmPath(path: Path):
     if path.is_dir(): shutil.rmtree(path)
     if path.is_file(): path.unlink()
 
+
 async def convertCleanup(group_id: str, user_id: str):
     images_dir = config.bot_base / group_id / user_id / "images"
     videos_dir = config.bot_base / group_id / user_id / "videos"
@@ -26,6 +27,7 @@ async def convertCleanup(group_id: str, user_id: str):
     for path in [images_dir, videos_dir, tar_path, temp_dir]:
             await rmPath(path)
             logger.info(f"已删除: {path}")
+
 
 async def sendMsg(bot: Bot, group_id: str, user_id: str, msg: str | Message):
     if group_id == "private":
@@ -40,42 +42,35 @@ async def sendMsg(bot: Bot, group_id: str, user_id: str, msg: str | Message):
         logger.error(f"发送 {msg} 失败: {e}")
     return
 
+
 async def stuffDownload(client: httpx.AsyncClient, url: str | httpx.URL, output_path: Path):
     resp = await client.get(url, follow_redirects=True)
     resp. raise_for_status()
     output_path.write_bytes(resp.content)
 
 
+async def getImagesUrl(bot: Bot, event_reply: Reply | None, event_msg: Message, depth: int):
+    rax = []
 
-async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Message, client: httpx.AsyncClient, dldir: Path, store_list: asyncio.Queue[str], user_id: str, depth: int):
     reply_segs = []
     if event_reply:
         reply_msgs = await bot.get_msg(message_id=event_reply.message_id)
         reply_segs = Message([MessageSegment(seg['type'], seg['data']) for seg in reply_msgs['message']])
+
     segs = reply_segs + event_msg
+
     for seg in segs:
         if seg.type not in ["image", "forward", "reply"]: continue
-        if seg.type != "image" and depth <= 0: continue
+        if seg.type  != "image" and depth <= 0: continue
 
         # base case
         if seg.type == "image":
-            img_url = seg.data.get('url', '')
-            if not img_url: continue
+            url = seg.data.get('url', "")
+            if not url: continue
+            rax.append(url)
+            continue
 
-            orig_file = seg.data.get('file', 'image')
-            safe_name = f"{uuid.uuid4().hex}"
-            save_path = dldir / safe_name
-
-            try:
-                resp = await client.get(img_url, follow_redirects=True)
-                resp.raise_for_status()
-                save_path.write_bytes(resp.content)
-                await store_list.put(str(save_path))
-                logger.info(f"下载图片成功: {save_path}")
-            except Exception as e:
-                logger.error(f"下载图片失败 {img_url}: {e}")
-
-        msg_id = seg.data.get('id', '')
+        msg_id = seg.data.get('id', "")
         if not msg_id: continue
 
         # rec case 1
@@ -83,12 +78,11 @@ async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Mess
             try:
                 reply_msg = await bot.get_msg(message_id=msg_id)
                 reply_segs = Message([MessageSegment(seg['type'], seg['data']) for seg in reply_msg['message']])
-                await imagesDownload(bot, None, reply_segs, client, dldir, store_list, user_id, depth - 1)
+                rax += await getImagesUrl(bot, None, reply_segs, depth - 1)
             except Exception as e:
                 logger.error(f"获取引用消息失败 (ID: {msg_id}): {e}")
-                continue
+            continue
 
-        # rec cases 2
         if seg.type == "forward":
             forward_msgs = seg.data.get('content')
             if forward_msgs is None:
@@ -99,8 +93,9 @@ async def imagesDownload(bot: Bot, event_reply: Optional[Reply], event_msg: Mess
                     logger.error(f"获取转发消息失败 (ID: {msg_id}): {e}")
                     continue
             if not forward_msgs: continue
-
             for forward_msg in forward_msgs:
                 message_segs = Message([MessageSegment(seg['type'], seg['data']) for seg in forward_msg.get('message', [])])
-                await imagesDownload(bot, None, Message(message_segs), client, dldir, store_list, user_id, depth - 1)
+                rax += await getImagesUrl(bot, None, message_segs, depth - 1)
             continue
+
+    return rax
