@@ -124,9 +124,12 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
     async def _send(group: int, maxtry: int):
         for i in range(maxtry):
             try:
-                await bot.send_group_msg(group_id=group, message=event.get_message())
+                msg = event.get_message()
+                if not msg: return
+                msg[-1].data["summary"] = "喵~"
+                await bot.send_group_msg(group_id=group, message=msg)
                 return
-            except ActionFailed as e:
+            except Exception as e:
                 if i >= maxtry - 1:
                     logger.error(f"转发失败:{e}")
                     return
@@ -150,7 +153,10 @@ async def handleMsgAutoreply(bot: Bot, event: MessageEvent):
         if seg.type != "text": continue
         text = seg.data.get('text', "")
         if text.replace("!", "").replace(" ", "").replace("！", "").replace("w", "").replace("我", "") in ["csn", "草死你", "操死你", "🌿死你", "艹死你", "zjsncsn"]:
-            await sendMsg(bot, group_id, user_id, Message(MessageSegment.image(f"file://{config.client_base / "wcsn.jpg"}")))
+            msg = Message(MessageSegment.image(f"file://{config.client_base / "wcsn.jpg"}"))
+            msg[0].data["sub_type"] = 2
+            msg[0].data["summary"] = "😅"
+            await sendMsg(bot, group_id, user_id, msg)
             return
         if text.replace("?", "").replace(" ", "").replace("？", "") in ["这是你吗", "zsnm", "是你吗"]:
             await sendMsg(bot, group_id, user_id, "是我。")

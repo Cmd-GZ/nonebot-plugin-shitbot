@@ -350,7 +350,9 @@ class BotCommandRandpic(BotCommand):
 
         try:
             client_path = config.client_base / save_path.relative_to(config.bot_base)
-            await self._send_msg(Message(MessageSegment.image(f"file://{client_path}")))
+            msg = Message(MessageSegment.image(f"file://{client_path}"))
+            msg[0].data["summary"] = "我的新自拍喵[图片]"
+            await self._send_msg(msg)
             logger.info(f"发送图片成功: {client_path}")
         except Exception as e:
             logger.error(f"发送 {save_path.name} 失败: {e}")
