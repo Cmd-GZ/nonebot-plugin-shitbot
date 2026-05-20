@@ -7,7 +7,7 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.adapters.onebot.v11.exception import ActionFailed
 
-from .auxiliaries import sendMsg, getImagesUrl, stuffDownload
+from .auxiliaries import sendMsg, getImagesUrl, stuffDownload, getForwardNodes, sendNodes
 from .session import BotSession
 from .command import *
 from .config import getConfig
@@ -121,11 +121,23 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
     if not isinstance(session.command, BotCommandShitpost): return
     if not session.command.is_forwardable: return
 
+
     async def _send(group: int, maxtry: int):
         for i in range(maxtry):
             try:
                 msg = event.get_message()
                 if not msg: return
+                if msg[0].type == "forward":
+                    msg_id = msg[0].data.get("id")
+                    if msg_id is None: return
+                    forward_data = await bot.get_forward_msg(id=msg_id)
+                    forward_msgs = forward_data.get('messages', [])
+                    nodes = getForwardNodes(forward_msgs, config.max_message_depth)
+                    await sendNodes(bot, str(group), "", nodes)
+                    return
+                for seg in msg:
+                    seg.data["summary"] = "喵~"
+                    if not seg.data.get("sub_type", 0) == 0: seg.data["sub_type"] = 1
                 msg[-1].data["summary"] = "喵~"
                 await bot.send_group_msg(group_id=group, message=msg)
                 return
@@ -154,8 +166,8 @@ async def handleMsgAutoreply(bot: Bot, event: MessageEvent):
         text = seg.data.get('text', "")
         if text.replace("!", "").replace(" ", "").replace("！", "").replace("w", "").replace("我", "") in ["csn", "草死你", "操死你", "🌿死你", "艹死你", "zjsncsn"]:
             msg = Message(MessageSegment.image(f"file://{config.client_base / "wcsn.jpg"}"))
-            msg[0].data["sub_type"] = 2
-            msg[0].data["summary"] = "😅"
+            msg[0].data["sub_type"] = 1
+            msg[0].data["summary"] = "喵呜~"
             await sendMsg(bot, group_id, user_id, msg)
             return
         if text.replace("?", "").replace(" ", "").replace("？", "") in ["这是你吗", "zsnm", "是你吗"]:

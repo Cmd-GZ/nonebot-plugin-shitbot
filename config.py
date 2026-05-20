@@ -12,6 +12,7 @@ class ShitBotConfig(BaseModel):
     temp_dir: Path
     whitelist_groups_setu: List[str]
     whitelist_users_setu: List[str]
+    max_message_depth: int
 
     class Config:
         arbitrary_types_allowed = True

@@ -3,7 +3,7 @@ import shutil
 import httpx
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from nonebot.log import logger
 from nonebot.adapters.onebot.v11.event import Reply
@@ -47,6 +47,68 @@ async def stuffDownload(client: httpx.AsyncClient, url: str | httpx.URL, output_
     resp = await client.get(url, follow_redirects=True)
     resp. raise_for_status()
     output_path.write_bytes(resp.content)
+
+
+def setNode(*, user_id: int, nickname: str | None = None, content: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if nickname is None: nickname = str(user_id)
+    node = {
+        "type": "node",
+        "data": {
+            "user_id": user_id,
+            "nickname": nickname,
+            "content": content
+        }
+    }
+    return node
+
+
+def getForwardNodes(forward_msgs: List[Dict[str, Any]], depth: int) -> List[Dict[str, Any]]:
+    nodes = []
+    if not forward_msgs: return []
+    for forward_msg in forward_msgs:
+        if not forward_msg.get("sender"): continue
+        if not forward_msg.get("message"): continue
+        if not forward_msg["message"][0].get("type"): continue
+        if forward_msg["message"][0]["type"] != "forward":
+            user_id = forward_msg["sender"].get("user_id", 114514)
+            nickname = forward_msg["sender"].get("nickname", None)
+            content = []
+            for seg in forward_msg.get("message", []):
+                term = {"type": seg["type"], "data": seg["data"]}
+                content.append(term)
+                continue
+            node = setNode(user_id=user_id, nickname=nickname, content=content)
+            nodes.append(node)
+            continue
+
+        if depth <= 0: continue
+        inner_nodes = getForwardNodes(forward_msg["message"][0]["data"].get('content', []), depth - 1)
+        content = [{"type": "text", "data": {"text": f"第{config.max_message_depth - depth + 1}层内层聊天记录开始: ("}}]
+        node = setNode(user_id=0, nickname="Bot", content=content)
+        nodes.append(node)
+        nodes.extend(inner_nodes)
+        content = [{"type": "text", "data": {"text": f") :第{config.max_message_depth - depth + 1}层内层聊天记录结束"}}]
+        node = setNode(user_id=0, nickname="Bot", content=content)
+        nodes.append(node)
+
+    return nodes
+
+async def sendNodes(bot: Bot, group_id: str, user_id: str, nodes: List[Dict[str, Any]]):
+    for i in range(0, len(nodes), 100):
+        curnodes = nodes[i:i+100]
+        if group_id == "private":
+            try:
+                await bot.call_api('send_private_forward_msg', user_id=int(user_id), messages=curnodes)
+            except Exception as e:
+                logger.error(f"发送合并信息失败: {e}")
+                raise
+            continue
+        try:
+            await bot.call_api('send_group_forward_msg', group_id=int(group_id), messages=curnodes)
+        except Exception as e:
+            logger.error(f"发送合并信息失败: {e}")
+            raise
+        continue
 
 
 async def getImagesUrl(bot: Bot, event_reply: Reply | None, event_msg: Message, depth: int):
