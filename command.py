@@ -304,8 +304,11 @@ class BotCommandRandpic(BotCommand):
     def _ifLegalGrammars(self, argv: List[str]):
         return [
             len(argv) == 0, # /randpic
+            len(argv) == 1 and argv[0].isdigit(), # /randpic <number>
             len(argv) == 1 and argv[0] == "unable", # /randpic unable
+            len(argv) == 2 and argv[0] == "unable" and argv[1].isdigit(), # /randpic unable <number>
             len(argv) == 1 and argv[0] == "able", # /randpic able
+            len(argv) == 2 and argv[0] == "able" and argv[1].isdigit(), # /randpic able <number>
         ]
 
     async def run(self):
@@ -316,7 +319,13 @@ class BotCommandRandpic(BotCommand):
             self.unlock()
             return
 
-        if truthvalues[2] and self.session.group_id != "private":
+        num = 1
+        if truthvalues[1]: num = int(self.argv[0])
+        if truthvalues[3] or truthvalues[5]: num = int(self.argv[1])
+        if num < 1: num = 1
+        if num > 10: num = 10
+
+        if (truthvalues[4] or truthvalues[5]) and self.session.group_id != "private":
             tip = "该功能只能在私聊中使用"
             await self._send_msg(tip)
             self.unlock()
@@ -327,38 +336,38 @@ class BotCommandRandpic(BotCommand):
             self.unlock()
             return
 
-        if not truthvalues[1]:
+        if truthvalues[0] or truthvalues[1] or truthvalues[2] or truthvalues[3]:
             api = "https://manyacg.top/setu"
         else:
             if self.session.user_id not in config.whitelist_users_setu:
                 self.unlock()
                 return
             api = "https://manyacg.top/sese"
+        for i in range(num):
+            images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
+            await rmPath(images_dir)
+            images_dir.mkdir(parents=True, exist_ok=True)
+            safe_name = f"{uuid.uuid4().hex}"
+            save_path = images_dir / safe_name
 
-        images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
-        await rmPath(images_dir)
-        images_dir.mkdir(parents=True, exist_ok=True)
-        safe_name = f"{uuid.uuid4().hex}"
-        save_path = images_dir / safe_name
+            async with httpx.AsyncClient() as client:
+                try:
+                    await stuffDownload(client, api, save_path)
+                    logger.info(f"下载图片成功: {save_path}")
+                except Exception as e:
+                    logger.error(f"下载图片失败 {api}: {e}")
 
-        async with httpx.AsyncClient() as client:
             try:
-                await stuffDownload(client, api, save_path)
-                logger.info(f"下载图片成功: {save_path}")
+                client_path = config.client_base / save_path.relative_to(config.bot_base)
+                msg = Message(MessageSegment.image(f"file://{client_path}"))
+                msg[0].data["summary"] = "我的新自拍喵[图片]"
+                await self._send_msg(msg)
+                logger.info(f"发送图片成功: {client_path}")
             except Exception as e:
-                logger.error(f"下载图片失败 {api}: {e}")
+                logger.error(f"发送 {save_path.name} 失败: {e}")
+                await self._send_msg(f"图片发送失败：{e}")
 
-        try:
-            client_path = config.client_base / save_path.relative_to(config.bot_base)
-            msg = Message(MessageSegment.image(f"file://{client_path}"))
-            msg[0].data["summary"] = "我的新自拍喵[图片]"
-            await self._send_msg(msg)
-            logger.info(f"发送图片成功: {client_path}")
-        except Exception as e:
-            logger.error(f"发送 {save_path.name} 失败: {e}")
-            await self._send_msg(f"图片发送失败：{e}")
-
-        await rmPath(images_dir)
+            await rmPath(images_dir)
         self.unlock()
 
 

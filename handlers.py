@@ -1,5 +1,6 @@
 import asyncio
 import httpx
+import random
 
 from nonebot import on_command, on_message
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment, Message
@@ -12,6 +13,8 @@ from .session import BotSession
 from .command import *
 from .config import getConfig
 config = getConfig()
+
+shitlock = asyncio.Lock()
 
 
 def getSubClses(cls: type):
@@ -120,6 +123,7 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
     if not session.command: return
     if not isinstance(session.command, BotCommandShitpost): return
     if not session.command.is_forwardable: return
+    groups = session.command.groups
 
 
     async def _send(group: int, maxtry: int):
@@ -148,9 +152,10 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
                 logger.error(f"转发失败，准备第{i + 1}次重试")
                 await asyncio.sleep(0.25)
 
-
-    for group in session.command.groups:
-        asyncio.create_task(_send(group, 3))
+    async with shitlock:
+        for group in groups:
+            asyncio.create_task(_send(group, 3))
+        await asyncio.sleep(random.randint(10, 60))
 
 
 # Simple auto reply, just for fun :). May be reconstructed in fucture.
