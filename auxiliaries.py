@@ -62,53 +62,54 @@ def setNode(*, user_id: int, nickname: str | None = None, content: List[Dict[str
     return node
 
 
-def getForwardNodes(forward_msgs: List[Dict[str, Any]], depth: int) -> List[Dict[str, Any]]:
+def getForwardNodes(forward_msgs: List[Dict[str, Any]], depth: int, *, summary: str = "") -> List[Dict[str, Any]]:
     nodes = []
     if not forward_msgs: return []
     for forward_msg in forward_msgs:
         if not forward_msg.get("sender"): continue
         if not forward_msg.get("message"): continue
         if not forward_msg["message"][0].get("type"): continue
-        if forward_msg["message"][0]["type"] != "forward":
-            user_id = forward_msg["sender"].get("user_id", 114514)
-            nickname = forward_msg["sender"].get("nickname", None)
-            content = []
-            for seg in forward_msg.get("message", []):
+        user_id = forward_msg["sender"].get("user_id", 0)
+        nickname = forward_msg["sender"].get("nickname", None)
+        content = []
+        if len(forward_msg.get("message", [])) == 1 and forward_msg.get("message", [])[0]["type"] == "forward":
+            if depth <= 0: continue
+            seg = forward_msg.get("message", [])[0]
+            content = getForwardNodes(seg["data"].get('content', []), depth - 1)
+            node = setNode(user_id=user_id, nickname=nickname, content=content)
+            if summary: node["data"]["summary"] = summary
+            nodes.append(node)
+            continue
+        for seg in forward_msg.get("message", []):
+            if seg["type"] != "forward":
+                if summary: seg["data"]["summary"] = summary
                 term = {"type": seg["type"], "data": seg["data"]}
                 content.append(term)
                 continue
-            node = setNode(user_id=user_id, nickname=nickname, content=content)
-            nodes.append(node)
-            continue
-
-        if depth <= 0: continue
-        inner_nodes = getForwardNodes(forward_msg["message"][0]["data"].get('content', []), depth - 1)
-        content = [{"type": "text", "data": {"text": f"第{config.max_message_depth - depth + 1}层内层聊天记录开始: ("}}]
-        node = setNode(user_id=0, nickname="Bot", content=content)
-        nodes.append(node)
-        nodes.extend(inner_nodes)
-        content = [{"type": "text", "data": {"text": f") :第{config.max_message_depth - depth + 1}层内层聊天记录结束"}}]
-        node = setNode(user_id=0, nickname="Bot", content=content)
+            if depth <= 0: continue
+            inner_content = getForwardNodes(seg["data"].get('content', []), depth - 1)
+            inner_node = setNode(user_id=user_id, nickname=nickname, content=inner_content)
+            if summary: inner_node["data"]["summary"] = summary
+            content.append(inner_node)
+        node = setNode(user_id=user_id, nickname=nickname, content=content)
+        if summary: node["data"]["summary"] = summary
         nodes.append(node)
 
     return nodes
 
 async def sendNodes(bot: Bot, group_id: str, user_id: str, nodes: List[Dict[str, Any]]):
-    for i in range(0, len(nodes), 100):
-        curnodes = nodes[i:i+100]
-        if group_id == "private":
-            try:
-                await bot.call_api('send_private_forward_msg', user_id=int(user_id), messages=curnodes)
-            except Exception as e:
-                logger.error(f"发送合并信息失败: {e}")
-                raise
-            continue
+    if group_id == "private":
         try:
-            await bot.call_api('send_group_forward_msg', group_id=int(group_id), messages=curnodes)
+            await bot.call_api('send_private_forward_msg', user_id=int(user_id), messages=nodes)
         except Exception as e:
             logger.error(f"发送合并信息失败: {e}")
             raise
-        continue
+        return
+    try:
+        await bot.call_api('send_group_forward_msg', group_id=int(group_id), messages=nodes)
+    except Exception as e:
+        logger.error(f"发送合并信息失败: {e}")
+        raise
 
 
 async def getImagesUrl(bot: Bot, event_reply: Reply | None, event_msg: Message, depth: int):

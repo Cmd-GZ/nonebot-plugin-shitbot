@@ -136,7 +136,7 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
                     if msg_id is None: return
                     forward_data = await bot.get_forward_msg(id=msg_id)
                     forward_msgs = forward_data.get('messages', [])
-                    nodes = getForwardNodes(forward_msgs, config.max_message_depth)
+                    nodes = getForwardNodes(forward_msgs, config.max_message_depth, summary="喵~")
                     await sendNodes(bot, str(group), "", nodes)
                     return
                 for seg in msg:
@@ -155,7 +155,7 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
     async with shitlock:
         for group in groups:
             asyncio.create_task(_send(group, 3))
-        await asyncio.sleep(random.randint(10, 60))
+        await asyncio.sleep(random.randint(60, 300))
 
 
 # Simple auto reply, just for fun :). May be reconstructed in fucture.
