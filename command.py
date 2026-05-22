@@ -158,8 +158,9 @@ class BotCommandHelp(BotCommand):
         if truthvalues[3]:
             tip =  "/randpic:        随机发送二次元图片\n\n"
             tip += "命令格式：\n\n"
-            tip += "  /randpic unable 或 /randpic: 从受限API中随机获取一张二次元图片并发送 \n\n"
-            tip += "  /randpic able: 从不受限API中随机获取一张二次元图片并发送（仅私聊可用）"
+            tip += "  /randpic unable <数字> 或 /randpic [数字]: 从受限API中随机获取[数字]张二次元图片并发送（不填写默认为1） \n\n"
+            tip += "  /randpic able: 作用同上，但图片是从不受限API中获取的（仅私聊可用）"
+            tip += "  [数字]的范围是1~10，若输入小于1则会取1，若输入大于10则会取10"
 
         if truthvalues[4]:
             tip =  "/shitpost:        转发信息到多个群聊中（仅私聊可用）\n\n"

@@ -32,12 +32,12 @@ async def convertCleanup(group_id: str, user_id: str):
 async def sendMsg(bot: Bot, group_id: str, user_id: str, msg: str | Message):
     if group_id == "private":
         try:
-            await bot.send_private_msg(user_id=int(user_id), message=msg)
+            return await bot.send_private_msg(user_id=int(user_id), message=msg)
         except Exception as e:
             logger.error(f"发送 {msg} 失败: {e}")
         return
     try:
-        await bot.send_group_msg(group_id=int(group_id), message=msg)
+        return await bot.send_group_msg(group_id=int(group_id), message=msg)
     except Exception as e:
         logger.error(f"发送 {msg} 失败: {e}")
     return
@@ -100,13 +100,12 @@ def getForwardNodes(forward_msgs: List[Dict[str, Any]], depth: int, *, summary: 
 async def sendNodes(bot: Bot, group_id: str, user_id: str, nodes: List[Dict[str, Any]]):
     if group_id == "private":
         try:
-            await bot.call_api('send_private_forward_msg', user_id=int(user_id), messages=nodes)
+            return await bot.call_api('send_private_forward_msg', user_id=int(user_id), messages=nodes)
         except Exception as e:
             logger.error(f"发送合并信息失败: {e}")
             raise
-        return
     try:
-        await bot.call_api('send_group_forward_msg', group_id=int(group_id), messages=nodes)
+        return await bot.call_api('send_group_forward_msg', group_id=int(group_id), messages=nodes)
     except Exception as e:
         logger.error(f"发送合并信息失败: {e}")
         raise
