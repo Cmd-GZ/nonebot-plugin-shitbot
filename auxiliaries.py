@@ -40,13 +40,17 @@ async def sendMsg(bot: Bot, group_id: str, user_id: str, msg: str | Message):
         return await bot.send_group_msg(group_id=int(group_id), message=msg)
     except Exception as e:
         logger.error(f"发送 {msg} 失败: {e}")
-    return
+        raise
 
 
 async def stuffDownload(client: httpx.AsyncClient, url: str | httpx.URL, output_path: Path):
-    resp = await client.get(url, follow_redirects=True)
-    resp. raise_for_status()
-    output_path.write_bytes(resp.content)
+    try:
+        resp = await client.get(url, follow_redirects=True)
+        resp.raise_for_status()
+        output_path.write_bytes(resp.content)
+    except Exception as e:
+        logger.error(f"下载 {url} 失败: {e}")
+        raise
 
 
 def setNode(*, user_id: int, nickname: str | None = None, content: List[Dict[str, Any]]) -> Dict[str, Any]:

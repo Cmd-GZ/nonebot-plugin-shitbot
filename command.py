@@ -345,30 +345,14 @@ class BotCommandRandpic(BotCommand):
                 return
             api = "https://manyacg.top/sese"
         for i in range(num):
-            images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
-            await rmPath(images_dir)
-            images_dir.mkdir(parents=True, exist_ok=True)
-            safe_name = f"{uuid.uuid4().hex}"
-            save_path = images_dir / safe_name
-
-            async with httpx.AsyncClient() as client:
-                try:
-                    await stuffDownload(client, api, save_path)
-                    logger.info(f"下载图片成功: {save_path}")
-                except Exception as e:
-                    logger.error(f"下载图片失败 {api}: {e}")
-
             try:
-                client_path = config.client_base / save_path.relative_to(config.bot_base)
-                msg = Message(MessageSegment.image(f"file://{client_path}"))
+                msg = Message(MessageSegment("image", {"url": api}))
                 msg[0].data["summary"] = "我的新自拍喵[图片]"
                 await self._send_msg(msg)
-                logger.info(f"发送图片成功: {client_path}")
+                logger.info(f"发送图片成功")
             except Exception as e:
-                logger.error(f"发送 {save_path.name} 失败: {e}")
+                logger.error(f"发送图片失败: {e}")
                 await self._send_msg(f"图片发送失败：{e}")
-
-            await rmPath(images_dir)
         self.unlock()
 
 
