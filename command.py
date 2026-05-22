@@ -1,4 +1,5 @@
 from __future__ import annotations
+from os import truncate
 from typing import TYPE_CHECKING
 
 import asyncio
@@ -23,20 +24,21 @@ if TYPE_CHECKING:
     from .session import BotSession
 
 class BotCommand:
+    _argv: List[str] | None
     _sentinel = object()
     _name = "otherwise"
     # DON'T FUCKING CALL ME!
-    def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
+    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
         if _internal is not self._sentinel: raise TypeError("Please use BotCommand.make() instead of BotCommand()")
         self._bot = bot
         self._session = session
-        self._argv = args.extract_plain_text().strip().split()
+        self._argv = None
         session.command = self
 
     @classmethod
-    def make(cls, bot: Bot, session: BotSession, args: Message=Message()) -> BotCommand | None:
+    def make(cls, bot: Bot, session: BotSession) -> BotCommand | None:
         if session.command: return None
-        return cls(bot, session, args, _internal=cls._sentinel)
+        return cls(bot, session, _internal=cls._sentinel)
 
     @classmethod
     def getName(cls):
@@ -81,17 +83,8 @@ class BotCommand:
         if not self.session: return
         await sendMsg(self.bot, self.session.group_id, self.session.user_id, msg)
 
-    # Change the status of the running command
-    async def setArgv(self, args: Message):
-        if not self.session: return
-        if not self.session.command: return
-        tip =  "错误：会话被占用\n"
-        tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-        await self._send_msg(tip)
-        return
-
     # Main function
-    async def run(self):
+    async def run(self, args: Message):
         if not self.session:
             self.unlock()
             return
@@ -109,8 +102,8 @@ class BotCommand:
 
 class BotCommandHelp(BotCommand):
     _name = "help"
-    def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
-        super().__init__(bot, session, args, _internal=_internal)
+    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
+        super().__init__(bot, session, _internal=_internal)
 
     def _ifLegalGrammars(self, argv: List[str]):
         return [
@@ -122,14 +115,17 @@ class BotCommandHelp(BotCommand):
             True, # /help ...
         ]
 
-    async def run(self):
+    async def run(self, args: Message):
         if not self.session: return
-
-        truthvalues = self._ifLegalGrammars(self.argv)
+        new_argv = args.extract_plain_text().strip().split()
+        new_truthvalues = self._ifLegalGrammars(new_argv)
         # I know it's impossble to be true. Just for formalism :)
-        if not await self._legalCase(truthvalues):
-            self.unlock()
+        if not await self._legalCase(new_truthvalues):
+            if self._argv is None: self.unlock()
             return
+
+        self._argv = new_argv
+        truthvalues = new_truthvalues
 
         tip =  "使用方法：\n"
         tip += "  /help          显示帮助\n"
@@ -174,8 +170,9 @@ class BotCommandHelp(BotCommand):
 
 class BotCommandConvert(BotCommand):
     _name = "convert"
-    def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
-        super().__init__(bot, session, args, _internal=_internal)
+    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
+        super().__init__(bot, session, _internal=_internal)
+        self._runlock = asyncio.Lock()
         self._event = asyncio.Event()
         self._p2png_event = asyncio.Event()
         self._if_accept_pic = False
@@ -214,60 +211,26 @@ class BotCommandConvert(BotCommand):
             len(argv) == 1 and argv[0] == "stop", # /convert stop
         ]
 
-    async def setArgv(self, args: Message):
+    async def _convertStart(self):
         if not self.session: return
-        new_argv = args.extract_plain_text().strip().split()
-        truthvalues = self._ifLegalGrammars(new_argv)
-        if not await self._legalCase(truthvalues):
-            return
-
-        if truthvalues[0]:
-            if not self.session.command: return
-            tip =  "错误：会话被占用\n"
-            tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-            await self._send_msg(tip)
-            return
-
-        # Now new_argv == ["stop"], and slef.argv == ["start"]
-        self._argv = new_argv
-        self._event.set()
-
-    async def run(self):
-        if not self.session: return
-
-        truthvalues = self._ifLegalGrammars(self.argv)
-        if not await self._legalCase(truthvalues):
-            self.unlock()
-            return
-
-        if truthvalues[1]:
-            tip =  "错误：会话未开始\n"
-            tip += f"你还没有开始收集图片，请先使用 /convert start 。"
-            await self._send_msg(tip)
-            self.unlock()
-            return
-
-        # Now self.argv == ["start"]
-        user_id = int(self.session.user_id)
-
         logger.info(f"用户 {self.session.user_id} 开始了图片收集")
         await self._send_msg("图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。")
         self._if_accept_pic = True
         asyncio.create_task(convertP2Png(self))
-        await self._event.wait()
-        # Now self.argv == ["stop"]
-        self._if_accept_pic = False
+        return
 
-        await self._send_msg("下载图片中...")
+    async def _convertStop(self):
+        if not self.session: return
+        self._if_accept_pic = False
+        user_id = self.session.user_id
+
+        await self._send_msg("保存图片中...")
         async with self.download_lock:
             pass
-        await self._send_msg("下载完毕。")
-
-        await self._send_msg("复制图片中...")
         self.p2png_event.set()
         async with self.copy_lock:
             pass
-        await self._send_msg("复制完毕。")
+        await self._send_msg("保存完毕。")
 
         images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
         videos_dir = config.bot_base / self.session.group_id / self.session.user_id / "videos"
@@ -286,7 +249,7 @@ class BotCommandConvert(BotCommand):
 
         async def _runTask():
             try:
-                await convertPng2V(self.bot, str(user_id), images_dir, videos_dir)
+                await convertPng2V(self.bot, user_id, images_dir, videos_dir)
             except Exception:
                 pass
             finally:
@@ -296,11 +259,47 @@ class BotCommandConvert(BotCommand):
         asyncio.create_task(_runTask())
         return
 
+    async def run(self, args: Message):
+        async with self._runlock:
+            if not self.session: return
+
+            new_argv = args.extract_plain_text().strip().split()
+            new_truthvalues = self._ifLegalGrammars(new_argv)
+            if not await self._legalCase(new_truthvalues):
+                if self._argv is None: self.unlock()
+                return
+
+            if self._argv is not None and new_truthvalues[0]:
+                if not self.session.command: return
+                tip =  "错误：会话被占用\n"
+                tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+                await self._send_msg(tip)
+                return
+
+            if self._argv is None and new_truthvalues[1]:
+                tip =  "错误：会话未开始\n"
+                tip += f"你还没有开始收集图片，请先使用 /convert start 。"
+                await self._send_msg(tip)
+                self.unlock()
+                return
+
+            # Now there are two cases: self_argv is None and new_truthvalues[0], and self._argv is not None and new_truthvaule[1]
+            self._argv = new_argv
+            truthvalues = new_truthvalues
+
+            if truthvalues[0]:
+                await self._convertStart()
+                return
+
+            if truthvalues[1]:
+                await self._convertStop()
+                return
+
 
 class BotCommandRandpic(BotCommand):
     _name = "randpic"
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
-        super().__init__(bot, session, args, _internal=_internal)
+        super().__init__(bot, session, _internal=_internal)
 
     def _ifLegalGrammars(self, argv: List[str]):
         return [
@@ -312,17 +311,28 @@ class BotCommandRandpic(BotCommand):
             len(argv) == 2 and argv[0] == "able" and argv[1].isdigit(), # /randpic able <number>
         ]
 
-    async def run(self):
+    async def run(self, args: Message):
         if not self.session: return
 
-        truthvalues = self._ifLegalGrammars(self.argv)
-        if not await self._legalCase(truthvalues):
-            self.unlock()
+        new_argv = args.extract_plain_text().strip().split()
+        new_truthvalues = self._ifLegalGrammars(new_argv)
+        if not await self._legalCase(new_truthvalues):
+            if self._argv is None: self.unlock()
             return
 
+        if self._argv is not None:
+            if not self.session.command: return
+            tip =  "错误：会话被占用\n"
+            tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+            await self._send_msg(tip)
+            return
+
+        self._argv = new_argv
+        truthvalues = new_truthvalues
+
         num = 1
-        if truthvalues[1]: num = int(self.argv[0])
-        if truthvalues[3] or truthvalues[5]: num = int(self.argv[1])
+        if truthvalues[1]: num = int(self._argv[0])
+        if truthvalues[3] or truthvalues[5]: num = int(self._argv[1])
         if num < 1: num = 1
         if num > 10: num = 10
 
@@ -359,7 +369,7 @@ class BotCommandRandpic(BotCommand):
 class BotCommandShitpost(BotCommand):
     _name = "shitpost"
     def __init__(self, bot: Bot, session: BotSession, args: Message=Message(), *, _internal=None):
-        super().__init__(bot, session, args, _internal=_internal)
+        super().__init__(bot, session, _internal=_internal)
         self._is_forwardable = False
         self._groups = []
         self._event = asyncio.Event()
@@ -382,55 +392,49 @@ class BotCommandShitpost(BotCommand):
             len(argv) == 1 and argv[0] == "stop", # /shitpost stop
         ]
 
-    async def setArgv(self, args: Message):
+    async def run(self, args: Message):
         if not self.session: return
         new_argv = args.extract_plain_text().strip().split()
-        truthvalues = self._ifLegalGrammars(new_argv)
-        if not await self._legalCase(truthvalues):
+        new_truthvalues = self._ifLegalGrammars(new_argv)
+        if not await self._legalCase(new_truthvalues):
+            if self._argv is None: self.unlock()
             return
 
-
-        if truthvalues[0]:
+        if self._argv is not None and new_truthvalues[0]:
             if not self.session.command: return
             tip =  "错误：会话被占用\n"
             tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
             await self._send_msg(tip)
             return
 
-        self._argv = new_argv
-        self._event.set()
-
-    async def run(self):
-        if not self.session: return
-
-        truthvalues = self._ifLegalGrammars(self.argv)
-        if not await self._legalCase(truthvalues):
-            self.unlock()
-            return
-
-        if truthvalues[1]:
+        if self._argv is None and new_truthvalues[1]:
             tip =  "错误：会话未开始"
             tip += "我还没吃上呢你着急啥，先输入 /shitpost start <群号1> <群号2> ... 开始搬石。"
             await self._send_msg(tip)
             self.unlock()
             return
+        # Now there are two cases: self_argv is None and new_truthvalues[0], and self._argv is not None and new_truthvaule[1]
+        self._argv = new_argv
+        truthvalues = new_truthvalues
 
-        groups = [int(arg) for arg in self.argv[1:]]
-        exist_groups = await self.bot.get_group_list()
-        for group in groups:
-            if all(group != exist_group['group_id'] for exist_group in exist_groups):
-                tip =  "错误：存在未知群号\n"
-                tip += f"Bot 未在 {group} 中，请检查输入是否正确。"
-                await self._send_msg(tip)
-                self.unlock()
-                return
+        if truthvalues[0]:
+            groups = [int(arg) for arg in self._argv[1:]]
+            exist_groups = await self.bot.get_group_list()
+            for group in groups:
+                if all(group != exist_group['group_id'] for exist_group in exist_groups):
+                    tip =  "错误：存在未知群号\n"
+                    tip += f"Bot 未在 {group} 中，请检查输入是否正确。"
+                    await self._send_msg(tip)
+                    self.unlock()
+                    return
 
-        self._groups = groups
-        self._is_forwardable = True
-        await self._send_msg("消息转发已开启，请将你要搬的史发给我。")
-        await self.event.wait()
+            self._groups = groups
+            self._is_forwardable = True
+            await self._send_msg("消息转发已开启，请将你要搬的史发给我。")
+            return
 
-        self._is_forwardable = False
-        await self._send_msg("豪赤，下回要搬的时候记得再叫我。")
-        self.unlock()
-        return
+        if truthvalues[1]:
+            self._is_forwardable = False
+            await self._send_msg("豪赤，下回要搬的时候记得再叫我。")
+            self.unlock()
+            return

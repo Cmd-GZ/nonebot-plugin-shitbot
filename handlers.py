@@ -40,7 +40,7 @@ async def cmdHandler(bot: Bot, matcher: type[Matcher], event: MessageEvent, cmd_
     cmdname = cmd_cls.getName()
 
     session = BotSession.make(group_id, user_id)
-    command = cmd_cls.make(bot, session, args)
+    command = cmd_cls.make(bot, session)
 
     if not session.command:
         tip = "未知错误: 会话command字段为None"
@@ -51,12 +51,7 @@ async def cmdHandler(bot: Bot, matcher: type[Matcher], event: MessageEvent, cmd_
         tip += f"命令 {session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
         await matcher.finish(tip)
 
-    if not command and session.command.name == cmdname:
-        await session.command.setArgv(args)
-
-    if not command: await matcher.finish() # Just for making the incorrect error disappear
-
-    await command.run()
+    await session.command.run(args)
     await matcher.finish()
 
 def cmdRegister(name: str, cmd_cls: type, *, only: str | None = None, priority: int = 1, block: bool = True):
