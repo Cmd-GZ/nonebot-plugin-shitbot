@@ -52,4 +52,5 @@
 
 ## 鸣谢
 
-- [ManyACG](https://manyacg.top): 为随机涩图提供了API
+- [ManyACG](https://manyacg.top): 为 /randpic 提供了API
+- [Lolicon APP](https://lolicon.app): 为 /advrandpic 提供了API
