@@ -43,11 +43,14 @@ async def sendMsg(bot: Bot, group_id: str, user_id: str, msg: str | Message):
         raise
 
 
-async def stuffDownload(client: httpx.AsyncClient, url: str | httpx.URL, output_path: Path):
+async def stuffDownload(client: httpx.AsyncClient, url: str | httpx.URL, output_path: Path, *, referer: str | None = None):
     try:
-        resp = await client.get(url, follow_redirects=True)
-        resp.raise_for_status()
-        output_path.write_bytes(resp.content)
+        headers = {"Referer": referer} if referer is not None else {}
+        async with client.stream("GET", url, headers=headers, follow_redirects=True) as resp:
+            resp.raise_for_status()
+            with open(output_path, "wb") as f:
+                async for chunk in resp.aiter_bytes():
+                    f.write(chunk)
     except Exception as e:
         logger.error(f"下载 {url} 失败: {e}")
         raise

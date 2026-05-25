@@ -2,7 +2,7 @@ import asyncio
 import httpx
 import random
 
-from nonebot import on_command, on_message
+from nonebot import on_command, on_message, get_driver
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment, Message
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
@@ -54,7 +54,7 @@ async def cmdHandler(bot: Bot, matcher: type[Matcher], event: MessageEvent, cmd_
     await session.command.run(args)
     await matcher.finish()
 
-def cmdRegister(name: str, cmd_cls: type, *, only: str | None = None, priority: int = 1, block: bool = True):
+def cmdRegister(name: str, cmd_cls: type, *, only: str | None = None, priority: int = 2, block: bool = True):
     matcher = on_command(name, priority=priority, block=block)
 
     @matcher.handle()
@@ -63,17 +63,31 @@ def cmdRegister(name: str, cmd_cls: type, *, only: str | None = None, priority: 
 
     return matcher
 
+driver = get_driver()
+@driver.on_shutdown
+async def shutdown():
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+
+    await asyncio.gather(*tasks, return_exceptions=True)
+    loop = asyncio.get_running_loop()
+    loop.stop()
+
+
 
 # ===Commands handlers=== #
 cmd_help = cmdRegister("help", BotCommandHelp)
 
 cmd_randpic = cmdRegister("randpic", BotCommandRandpic)
 
+cmd_randpic = cmdRegister("advrandpic", BotCommandAdvrandpic)
+
 cmd_convert = cmdRegister("convert", BotCommandConvert, only="private")
 
 cmd_shitpost = cmdRegister("shitpost", BotCommandShitpost, only="private")
 
-cmd_otherwise = cmdRegister("", BotCommand, priority=2)
+cmd_otherwise = cmdRegister("", BotCommand, priority=3)
 
 # ===Messages handlers=== #
 
@@ -119,12 +133,12 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
     if not isinstance(session.command, BotCommandShitpost): return
     if not session.command.is_forwardable: return
     groups = session.command.groups
+    msg = event.get_message()
 
 
-    async def _send(group: int, maxtry: int):
+    async def _send(group: int, msg: Message, maxtry: int):
         for i in range(maxtry):
             try:
-                msg = event.get_message()
                 if not msg: return
                 if msg[0].type == "forward":
                     msg_id = msg[0].data.get("id")
@@ -149,8 +163,8 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
 
     async with shitlock:
         for group in groups:
-            asyncio.create_task(_send(group, 3))
-        await asyncio.sleep(random.randint(60, 300))
+            asyncio.create_task(_send(group, msg, 3))
+        await asyncio.sleep(random.randint(30, 120))
 
 
 # Simple auto reply, just for fun :). May be reconstructed in fucture.
