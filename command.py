@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+import textwrap
 import requests
 import json
 import asyncio
@@ -118,71 +119,129 @@ class BotCommandHelp(BotCommand):
         self._parser.parse_argv(self._argv)
         subcmd = self._parser.subcmd
 
-        tip =  "使用方法：\n"
-        tip += "  /help          显示帮助\n"
-        tip += "  /convert       收集图片并批量转换为视频\n"
-        tip += "  /randpic       随机发送二次元图片\n"
-        tip += "  /advrandpic    随机发送二次元图片，支持指定tag\n"
-        tip += "  /shitpost      转发信息到多个群聊中"
-        tip += "\n"
-        tip += "使用例子：\n"
-        tip += "  /help help"
+        tip = textwrap.dedent("""\
+            可用命令：
+            /help        显示帮助信息
+            /convert     收集图片并批量转换为视频（仅私聊）
+            /randpic     随机获取二次元图片
+            /advrandpic  随机获取二次元图片，支持指定标签
+            /shitpost    将消息转发到多个群聊（仅私聊）
 
-        if subcmd is None:
-            tip =  "/help:           显示帮助\n\n"
-            tip += "命令格式：\n\n"
-            tip += "  /help          显示基础帮助\n\n"
-            tip += "  /help <命令>   显示<命令>的使用方法\n\n"
-            tip += "\n\n"
-            tip += "使用例子：\n\n"
-            tip += "  /help convert  获取 /convert 命令的使用方法"
+            示例：
+            /help help     查看 /help 的用法
+        """)
+
+        if subcmd == "help":
+            tip = textwrap.dedent("""\
+                /help: 显示帮助信息
+
+                使用方式：
+                /help          显示基础帮助
+                /help <命令>   显示指定命令的详细用法
+
+                示例：
+                /help          显示命令列表
+                /help convert  查看 /convert 的用法
+            """)
 
         if subcmd == "convert":
-            tip =  "/convert:        收集图片并批量转换为视频（仅私聊可用）\n\n"
-            tip += "命令格式：\n\n"
-            tip += "  /convert start 令 Bot 保存在提示出现后你接下来发送的图片，直至你输入 /convert stop \n\n"
-            tip += "  /convert stop  在输入 /convert start 并发送图片后输入， Bot 将停止保存你发送的图片，转而将收集到的图片按顺序转换为视频发送，最后打包发送一个 tar 归档。"
+            tip = textwrap.dedent("""\
+                /convert: 收集图片并批量转换为视频
+
+                使用方式：
+                /convert start  开始收集图片
+                                之后你发送的所有图片都会被 Bot 保存
+
+                /convert stop   停止收集，将图片转为视频并打包发送
+
+                示例：
+                /convert start
+                (发送图片...)
+                /convert stop
+
+                注意：此命令仅限私聊使用
+            """)
 
         if subcmd == "randpic":
-            tip =  "/randpic:        随机发送二次元图片\n\n"
-            tip += "命令格式：\n\n"
-            tip += "  /randpic [选项]: 随机获取二次元图片并发送 \n\n"
-            tip += "选项：\n\n"
-            tip += "    -n <数字>: 设置发送几张图片，范围应在1~10之间，默认为1\n\n"
-            tip += "    -r <模式>: 设置是否限制发送图片的类型，默认为off\n\n"
-            tip += "        -r off: 仅从受限图库中获取图片\n\n"
-            tip += "        -r on: 在整个图库中获取图片（仅私聊可用）\n\n"
+            tip = textwrap.dedent("""\
+                /randpic: 随机获取二次元图片并发送
+
+                使用方式：
+                /randpic [选项]
+
+                选项：
+                -n <数字>   设置发送图片数量，范围 1~10，默认为 1
+                -r <模式>   内容模式，默认为 off
+                    off: 启用内容过滤
+                    on:  关闭内容过滤 [仅私聊可用]
+
+                示例：
+                /randpic         获取 1 张图片
+                /randpic -n 3    获取 3 张图片
+
+                注意：-r on 仅限私聊使用
+            """)
 
         if subcmd == "advrandpic":
-            tip =  "/advrandpic:        随机发送二次元图片\n\n"
-            tip += "命令格式：\n\n"
-            tip += "  /advrandpic [选项]: 随机获取二次元图片并发送 \n\n"
-            tip += "选项：\n\n"
-            tip += "    -n <数字>: 设置发送几张图片，范围应在1~10之间，默认为1\n\n"
-            tip += "    -r <模式>: 设置是否限制发送图片的类型，默认为off\n\n"
-            tip += "        -r off: 仅发送全年龄图片\n\n"
-            tip += "        -r on: 不限制发送图片的类型（仅私聊可用）\n\n"
-            tip += "        -r only: 仅发送非全年龄图片（仅私聊可用）\n\n"
-            tip += "    -s <图片质量>: 设置发送的图片的质量，默认为regular\n\n"
-            tip += "        -s regular：发送普通质量的图片\n\n"
-            tip += "        -s original：发送原图质量的图片\n\n"
-            tip += "    -t <tag表达式>: 发送满足所给的tag表达式的图片，默认为空\n\n"
-            tip += "        <仅包含|的子表达式A>|<仅包含|的子表达式B>: 或运算，只要A或B其中一个被满足，该表达式就被满足\n\n"
-            tip += "        <子表达式A>&<子表达式B>: 与运算，只有A或B同时被满足，该表达式才被满足\n\n"
-            tip += "        |的优先级大于&的优先级\n\n"
-            tip += "        tag表达式只能同时包含3个&\n\n"
-            tip += "        tag表达式只能同时包含20个|\n\n"
-            tip += "        (在表达式中使用括号并不会改变运算优先级，还有可能使表达式无效)\n\n"
-            tip += "例子: \n\n"
-            tip += "    获取3张original质量的图片: /advrandpic -n 3 -s original\n\n"
-            tip += "    获取1张全年龄的图片: /advrandpic -r off -n 1 (或 /advrandpic )\n\n"
-            tip += "    获取5张(萝莉或少女)的(白丝或黑丝)的图片: /advrandpic -n 5 -t 萝莉|少女&白丝|黑丝\n\n"
+            tip = textwrap.dedent("""\
+                /advrandpic: 随机获取二次元图片，支持标签筛选
+
+                使用方式：
+                /advrandpic [选项]
+
+                选项：
+                -n <数字>       设置发送图片数量，范围 1~10，默认为 1
+                -r <模式>       内容模式，默认为 off
+                    off:  启用内容过滤
+                    on:   关闭内容过滤 [仅私聊可用]
+                    only: 仅发送被过滤的内容 [仅私聊可用]
+                -s <质量>       图片质量，默认为 regular
+                    regular:  普通质量
+                    original: 原图质量
+                -t <表达式>     标签筛选表达式，默认为空（不筛选）
+
+                tag表达式写法：
+                | 表示"或"：萝莉|少女 → 有萝莉或少女的标签就行
+                & 表示"与"：白丝&黑丝 → 同时有白丝和黑丝的标签才行
+
+                混合使用时，| 优先结合：萝莉|少女&白丝|黑丝
+                → 先处理 | 得到 (萝莉|少女) 和 (白丝|黑丝)
+                → 再用 & 连接，相当于 (萝莉|少女) 且 (白丝|黑丝)
+                → 最终效果：有(萝莉或少女) 且 有(白丝或黑丝)
+
+                限制：最多 3 个 &，最多 20 个 |
+                ！请勿使用括号，不会改变优先级，还可能让表达式无效
+
+                例子：
+                /advrandpic                   获取 1 张图片
+                /advrandpic -n 3 -s original  获取 3 张原图
+                /advrandpic -n 5 -t 萝莉|少女&白丝|黑丝
+                    获取 (萝莉 或 少女) 且 (白丝 或 黑丝) 的图片，共 5 张
+
+                注意：-r on 和 -r only 仅限私聊使用
+            """)
 
         if subcmd == "shitpost":
-            tip =  "/shitpost:        转发信息到多个群聊中（仅私聊可用）\n\n"
-            tip += "命令格式：\n\n"
-            tip += "  /convert start <群号1> <群号2> ...:  令 Bot 转发在提示出现后你接下来发送的信息到你指定的群聊，直至你输入 /shitpost stop \n\n"
-            tip += "  /shitpost stop  在输入 /shitpost start 后输入， Bot将停止转发你的信息"
+            tip = textwrap.dedent("""\
+                /shitpost: 将消息转发到多个群聊
+
+                使用方式：
+                /shitpost start <群号1> [群号2] [群号3] ...
+                    开始转发，之后你发送的所有消息都会转发到指定群
+
+                /shitpost stop
+                    停止转发
+
+                示例：
+                /shitpost start 123456 789012
+                (发送消息...)
+                /shitpost stop
+
+                注意：此命令仅限私聊使用
+                - 至少需要指定 1 个群号
+                - Bot 必须已经在目标群中
+                - 支持文本、图片、视频消息以及合并转发消息
+            """)
 
         await self._send_msg(tip)
         self.unlock()
