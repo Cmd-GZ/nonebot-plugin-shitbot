@@ -12,6 +12,7 @@ from pathlib import Path
 from nonebot.adapters.onebot.v11 import Bot, MessageSegment, Message
 from nonebot.log import logger
 
+from .parser import BotArgParser
 from .auxiliaries import rmPath, convertCleanup, sendMsg, stuffDownload
 from .tasks import convertPng2V, convertP2Png
 from .config import getConfig
@@ -30,6 +31,7 @@ class BotCommand:
         self._bot = bot
         self._session = session
         self._argv = None
+        self._parser = self._init_parser()
         session.command = self
 
     @classmethod
@@ -56,6 +58,9 @@ class BotCommand:
     @property
     def argv(self):
         return self._argv
+
+    def _init_parser(self):
+        return BotArgParser()
 
     # Return a list with the truth values of arguments where i-th element is true if and only if the format of arguments conform the i-th expression
     # if necessary, implement it in the subclass like:
