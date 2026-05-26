@@ -5,7 +5,7 @@ import shutil
 import asyncio
 import tarfile
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any
 
 from nonebot.adapters.onebot.v11 import Bot, Event, MessageEvent, MessageSegment, Message
 from nonebot.log import logger
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 bash = shutil.which("bash") or "/bin/bash"
 
-async def convertPng2V(bot: Bot, user_id: str, img_dir: Path, video_dir: Path):
+async def convertPng2V(bot: Bot, user_id: str, pid: str, img_dir: Path, video_dir: Path):
     try:
         user_id_int = int(user_id)
     except ValueError:
@@ -68,7 +68,7 @@ async def convertPng2V(bot: Bot, user_id: str, img_dir: Path, video_dir: Path):
                 logger.error(f"发送 {video_file.name} 失败: {e}")
                 await bot.send_private_msg(user_id=user_id_int, message=f"发送 {video_file.name} 失败: {e}")
 
-        tar_path = config.bot_base / "private" / user_id / f"{user_id}.tar"
+        tar_path = config.bot_base / "private" / user_id / pid / f"{user_id}.tar"
         with tarfile.open(tar_path, "w") as tar:
             for video_file in videos:
                 tar.add(video_file, arcname=video_file.name)
@@ -89,7 +89,7 @@ async def convertP2Png(command: BotCommandConvert):
     temp_images = command.temp_images
     images = command.images
     user_id = int(command.session.user_id)
-    output_dir = config.bot_base/ "private" / command.session.user_id / "images"
+    output_dir = config.bot_base/ "private" / command.session.user_id / str(command.pid) / "images"
     await rmPath(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     if_the_last = 0

@@ -3,7 +3,7 @@ import shutil
 import httpx
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 from nonebot.log import logger
 from nonebot.adapters.onebot.v11.event import Reply
@@ -18,11 +18,11 @@ async def rmPath(path: Path):
     if path.is_file(): path.unlink()
 
 
-async def convertCleanup(group_id: str, user_id: str):
-    images_dir = config.bot_base / group_id / user_id / "images"
-    videos_dir = config.bot_base / group_id / user_id / "videos"
-    tar_path = config.bot_base / group_id / user_id / f"{user_id}.tar"
-    temp_dir = config.bot_base / group_id / user_id / "temp"
+async def convertCleanup(group_id: str, user_id: str, pid: str):
+    images_dir = config.bot_base / group_id / user_id / pid / "images"
+    videos_dir = config.bot_base / group_id / user_id / pid / "videos"
+    tar_path = config.bot_base / group_id / user_id / pid / f"{user_id}.tar"
+    temp_dir = config.bot_base / group_id / user_id / pid / "temp"
 
     for path in [images_dir, videos_dir, tar_path, temp_dir]:
             await rmPath(path)
@@ -56,7 +56,7 @@ async def stuffDownload(client: httpx.AsyncClient, url: str | httpx.URL, output_
         raise
 
 
-def setNode(*, user_id: int, nickname: str | None = None, content: List[Dict[str, Any]]) -> Dict[str, Any]:
+def setNode(*, user_id: int, nickname: str | None = None, content: list[dict[str, Any]]) -> dict[str, Any]:
     if nickname is None: nickname = str(user_id)
     node = {
         "type": "node",
@@ -69,7 +69,7 @@ def setNode(*, user_id: int, nickname: str | None = None, content: List[Dict[str
     return node
 
 
-def getForwardNodes(forward_msgs: List[Dict[str, Any]], depth: int, *, summary: str = "") -> List[Dict[str, Any]]:
+def getForwardNodes(forward_msgs: list[dict[str, Any]], depth: int, *, summary: str = "") -> list[dict[str, Any]]:
     nodes = []
     if not forward_msgs: return []
     for forward_msg in forward_msgs:
@@ -104,7 +104,7 @@ def getForwardNodes(forward_msgs: List[Dict[str, Any]], depth: int, *, summary: 
 
     return nodes
 
-async def sendNodes(bot: Bot, group_id: str, user_id: str, nodes: List[Dict[str, Any]]):
+async def sendNodes(bot: Bot, group_id: str, user_id: str, nodes: list[dict[str, Any]]):
     if group_id == "private":
         try:
             return await bot.call_api('send_private_forward_msg', user_id=int(user_id), messages=nodes)

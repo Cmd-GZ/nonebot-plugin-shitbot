@@ -6,7 +6,7 @@ import json
 import asyncio
 import uuid
 import httpx
-from typing import Dict, List, Any
+from typing import Any
 from pathlib import Path
 
 from nonebot.adapters.onebot.v11 import Bot, MessageSegment, Message
@@ -22,22 +22,24 @@ if TYPE_CHECKING:
     from .session import BotSession
 
 class BotCommand:
-    _argv: List[str] | None
+    _argv: list[str] | None
     _sentinel = object()
     _name = "otherwise"
     # DON'T FUCKING CALL ME!
-    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
+    def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         if _internal is not self._sentinel: raise TypeError("Please use BotCommand.make() instead of BotCommand()")
         self._bot = bot
         self._session = session
         self._argv = None
         self._parser = self._init_parser()
-        session.command = self
+        self._pid = _pid
+        session.commands[_pid] = self
 
     @classmethod
-    def make(cls, bot: Bot, session: BotSession) -> BotCommand | None:
-        if session.command: return None
-        return cls(bot, session, _internal=cls._sentinel)
+    def make(cls, bot: Bot, session: BotSession, *, _pid: int | None = None) -> BotCommand | None:
+        if _pid is None: _pid = session.curpid
+        if session.commands.get(_pid): return None
+        return cls(bot, session, _pid=_pid, _internal=cls._sentinel)
 
     @classmethod
     def getName(cls):
@@ -58,6 +60,10 @@ class BotCommand:
     @property
     def argv(self):
         return self._argv
+
+    @property
+    def pid(self):
+        return self._pid
 
     def _init_parser(self):
         return BotArgParser()
@@ -88,18 +94,79 @@ class BotCommand:
 
     # Disconnect with the session, you should call in run() before return
     def unlock(self):
-        if self.session: self.session.command = None
+        if self._session is None: return
+        self._session.commands.pop(self._pid, None)
+        self._session.release()
         self._session = None
+
+
+class BotCommandSession(BotCommand):
+    _name = "session"
+    def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
+        super().__init__(bot, session, _pid=_pid, _internal=_internal)
+
+    def _init_parser(self):
+        parser = BotArgParser()
+        parser.set_rule(max=0, need_subcmd=True)
+        switch = parser.add_subparser('switch')
+        info = parser.add_subparser('info')
+        switch.set_rule(min=1, max=1, types=[int])
+        info.set_rule(max=0)
+        return parser
+
+    async def run(self, args: Message):
+        if self.session is None: return
+
+        new_argv = args.extract_plain_text().strip().split()
+        if not await self._legalCase(new_argv):
+            if self._argv is None: self.unlock()
+            return
+
+        if self._argv is not None:
+            command = self.session.commands.get(self._pid)
+            if not command: return
+            tip =  "错误：会话被占用\n"
+            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+            await self._send_msg(tip)
+            return
+
+        self._argv = new_argv
+        self._parser.parse_argv(self._argv)
+
+        subcmd = self._parser.subcmd
+
+        if subcmd == "switch":
+            if self._parser.subparsers[subcmd].value is None: return # Also impossible
+            pid = self._parser.subparsers[subcmd].value[0]
+
+            if pid <= 0:
+                tip =  "错误：pid不合规\n"
+                tip += f"pid应大于0。"
+                await self._send_msg(tip)
+                self.unlock()
+                return
+
+            self.session.curpid = pid
+
+        if subcmd == "info":
+            commands = self.session.commands
+            cmd_info = {pid: cmd.name for pid, cmd in commands.items()}
+            tip =  f"前台pid: {self.session.curpid}\n\n"
+            tip += f"正在运行的命令: \n{json.dumps(cmd_info, indent=2, ensure_ascii=False)}"
+            await self._send_msg(tip)
+
+        self.unlock()
 
 
 class BotCommandHelp(BotCommand):
     _name = "help"
-    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
-        super().__init__(bot, session, _internal=_internal)
+    def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
+        super().__init__(bot, session, _pid=_pid, _internal=_internal)
 
     def _init_parser(self):
         parser = BotArgParser()
         parser.add_subparser('help')
+        parser.add_subparser('session')
         parser.add_subparser('convert')
         parser.add_subparser('randpic')
         parser.add_subparser('shitpost')
@@ -135,6 +202,26 @@ class BotCommandHelp(BotCommand):
         if subcmd == "shitpost":
             path = f"file://{config.client_base / "helpshitpost.png"}"
 
+        if subcmd == "session":
+            tip =  "用法: /session <子命令> [参数]\n\n"
+            tip += "子命令:\n"
+            tip += "  switch <pid>    将前台切换到指定 pid\n"
+            tip += "  info            查看当前会话信息\n\n"
+            tip += "说明:\n"
+            tip += "  支持同时运行多条命令，每条占据一个 pid。\n"
+            tip += "  仅前台 pid（curpid）上的命令接收用户输入，\n"
+            tip += "  其余 pid 上的命令在后台运行。\n\n"
+            tip += "  switch 用于切换前台：\n"
+            tip += "  · 切换到空闲 pid 后启动新命令，即可并行执行多个任务\n"
+            tip += "  · 切换回某个 pid 即可继续操作该 pid 上的命令\n\n"
+            tip += "  新命令启动时自动占用当前 curpid。\n\n"
+            tip += "示例:\n"
+            tip += "  /session switch 3    将前台切换到 pid=3\n"
+            tip += "  /session info        查看所有运行中的命令以及前台对应的pid"
+            await self._send_msg(tip)
+            self.unlock()
+            return
+
         msg = Message(MessageSegment("image", {"file": path}))
 
         await self._send_msg(msg)
@@ -143,14 +230,14 @@ class BotCommandHelp(BotCommand):
 
 class BotCommandConvert(BotCommand):
     _name = "convert"
-    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
-        super().__init__(bot, session, _internal=_internal)
+    def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
+        super().__init__(bot, session, _pid=_pid, _internal=_internal)
         self._runlock = asyncio.Lock()
         self._event = asyncio.Event()
         self._p2png_event = asyncio.Event()
         self._if_accept_pic = False
         self._temp_images: asyncio.Queue[str] = asyncio.Queue()
-        self._images : List[str] = []
+        self._images : list[str] = []
         self._download_lock: asyncio.Lock = asyncio.Lock()
         self._copy_lock: asyncio.Lock = asyncio.Lock()
 
@@ -208,13 +295,13 @@ class BotCommandConvert(BotCommand):
             pass
         await self._send_msg("保存完毕。")
 
-        images_dir = config.bot_base / self.session.group_id / self.session.user_id / "images"
-        videos_dir = config.bot_base / self.session.group_id / self.session.user_id / "videos"
+        images_dir = config.bot_base / self.session.group_id / self.session.user_id / str(self._pid) / "images"
+        videos_dir = config.bot_base / self.session.group_id / self.session.user_id / str(self._pid) / "videos"
         await rmPath(videos_dir)
         videos_dir.mkdir(parents=True, exist_ok=True)
 
         if len(self.images) == 0:
-            await convertCleanup(self.session.group_id, self.session.user_id)
+            await convertCleanup(self.session.group_id, self.session.user_id, str(self._pid))
             await self._send_msg("没有有效的图片被保存。")
             self.unlock()
             return
@@ -225,11 +312,11 @@ class BotCommandConvert(BotCommand):
 
         async def _runTask():
             try:
-                await convertPng2V(self.bot, user_id, images_dir, videos_dir)
+                await convertPng2V(self.bot, user_id, str(self.pid), images_dir, videos_dir)
             except Exception:
                 pass
             finally:
-                if self.session: await convertCleanup(self.session.group_id, self.session.user_id)
+                if self.session: await convertCleanup(self.session.group_id, self.session.user_id, str(self._pid))
                 self.unlock()
 
         asyncio.create_task(_runTask())
@@ -248,9 +335,10 @@ class BotCommandConvert(BotCommand):
             subcmd = self._parser.subcmd
 
             if self._argv is not None and subcmd == "start":
-                if not self.session.command: return
+                command = self.session.commands.get(self._pid)
+                if not command: return
                 tip =  "错误：会话被占用\n"
-                tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+                tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
                 await self._send_msg(tip)
                 return
 
@@ -274,8 +362,8 @@ class BotCommandConvert(BotCommand):
 
 class BotCommandRandpic(BotCommand):
     _name = "randpic"
-    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
-        super().__init__(bot, session, _internal=_internal)
+    def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
+        super().__init__(bot, session, _pid=_pid, _internal=_internal)
 
     def _init_parser(self):
         parser = BotArgParser()
@@ -293,9 +381,10 @@ class BotCommandRandpic(BotCommand):
             return
 
         if self._argv is not None:
-            if not self.session.command: return
+            command = self.session.commands.get(self._pid)
+            if not command: return
             tip =  "错误：会话被占用\n"
-            tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
             await self._send_msg(tip)
             return
 
@@ -339,8 +428,8 @@ class BotCommandRandpic(BotCommand):
 
 class BotCommandAdvrandpic(BotCommand):
     _name = "advrandpic"
-    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
-        super().__init__(bot, session, _internal=_internal)
+    def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
+        super().__init__(bot, session, _pid=_pid, _internal=_internal)
         self._r18 = 0
         self._num = 1
         self._tag = None
@@ -364,9 +453,10 @@ class BotCommandAdvrandpic(BotCommand):
             return
 
         if self._argv is not None:
-            if not self.session.command: return
+            command = self.session.commands.get(self._pid)
+            if not command: return
             tip =  "错误：会话被占用\n"
-            tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
             await self._send_msg(tip)
             return
 
@@ -403,7 +493,7 @@ class BotCommandAdvrandpic(BotCommand):
             return
 
         api = 'https://api.lolicon.app/setu/v2'
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             'r18': self._r18,
             'num': self._num,
             'size': self._size,
@@ -440,8 +530,8 @@ class BotCommandAdvrandpic(BotCommand):
 
 class BotCommandShitpost(BotCommand):
     _name = "shitpost"
-    def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
-        super().__init__(bot, session, _internal=_internal)
+    def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
+        super().__init__(bot, session, _pid=_pid, _internal=_internal)
         self._is_forwardable = False
         self._groups = []
         self._event = asyncio.Event()
@@ -478,9 +568,10 @@ class BotCommandShitpost(BotCommand):
         subcmd = self._parser.subcmd
 
         if self._argv is not None and subcmd == "start":
-            if not self.session.command: return
+            command = self.session.commands.get(self._pid)
+            if not command: return
             tip =  "错误：会话被占用\n"
-            tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
             await self._send_msg(tip)
             return
 
