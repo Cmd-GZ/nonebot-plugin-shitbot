@@ -180,11 +180,13 @@ class BotArgParser:
                 value = sublist[1]
                 if self._opts_rule[option]['type'] == int:
                     value = int(value)
-                opt_values = self._opts_value.get(option)
-                if opt_values is None:
-                    opt_values = []
-                    self._opts_value[option] = opt_values
-                opt_values.append(value)
+            else:
+                value = True
+            opt_values = self._opts_value.get(option)
+            if opt_values is None:
+                opt_values = []
+                self._opts_value[option] = opt_values
+            opt_values.append(value)
 
         for i in range(len(partitioned_last)):
             index = i if i < len(self._rule['types']) else len(self._rule['types']) - 1

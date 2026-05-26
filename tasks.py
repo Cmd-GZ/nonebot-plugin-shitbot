@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+import shutil
 import asyncio
 import tarfile
 from pathlib import Path
@@ -17,6 +18,8 @@ config = getConfig()
 if TYPE_CHECKING:
     from .command import BotCommand, BotCommandConvert
 
+bash = shutil.which("bash") or "/bin/bash"
+
 async def convertPng2V(bot: Bot, user_id: str, img_dir: Path, video_dir: Path):
     try:
         user_id_int = int(user_id)
@@ -26,7 +29,7 @@ async def convertPng2V(bot: Bot, user_id: str, img_dir: Path, video_dir: Path):
     try:
         logger.info(f"执行转换脚本: {config.script_png2v_path} {img_dir} {video_dir}")
         proc = await asyncio.create_subprocess_exec(
-            str(config.script_png2v_path), str(img_dir), str(video_dir),
+            bash, str(config.script_png2v_path), str(img_dir), str(video_dir),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -108,7 +111,7 @@ async def convertP2Png(command: BotCommandConvert):
                 index += 1
                 logger.info(f"执行图片转png脚本: {config.script_p2png_path} {temp_image} {image}")
                 proc = await asyncio.create_subprocess_exec(
-                    "/bin/bash", str(config.script_p2png_path), str(temp_image), str(image),
+                    bash, str(config.script_p2png_path), str(temp_image), str(image),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )

@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import textwrap
-import requests
 import json
 import asyncio
 import uuid
@@ -63,7 +62,7 @@ class BotCommand:
     def _init_parser(self):
         return BotArgParser()
 
-    # Judge if the arugments is legal based on the parser and send msg if it's illegal
+    # Judge if the arguments is legal based on the parser and send msg if it's illegal
     async def _legalCase(self, argv: list[str]):
         if self._parser.is_valid(argv): return True
 
@@ -119,131 +118,26 @@ class BotCommandHelp(BotCommand):
         self._parser.parse_argv(self._argv)
         subcmd = self._parser.subcmd
 
-        tip = textwrap.dedent("""\
-            可用命令：
-            /help        显示帮助信息
-            /convert     收集图片并批量转换为视频（仅私聊）
-            /randpic     随机获取二次元图片
-            /advrandpic  随机获取二次元图片，支持指定标签
-            /shitpost    将消息转发到多个群聊（仅私聊）
-
-            示例：
-            /help help     查看 /help 的用法
-        """)
+        path = f"file://{config.client_base / "help.png"}"
 
         if subcmd == "help":
-            tip = textwrap.dedent("""\
-                /help: 显示帮助信息
-
-                使用方式：
-                /help          显示基础帮助
-                /help <命令>   显示指定命令的详细用法
-
-                示例：
-                /help          显示命令列表
-                /help convert  查看 /convert 的用法
-            """)
+            path = f"file://{config.client_base / "helphelp.png"}"
 
         if subcmd == "convert":
-            tip = textwrap.dedent("""\
-                /convert: 收集图片并批量转换为视频
-
-                使用方式：
-                /convert start  开始收集图片
-                                之后你发送的所有图片都会被 Bot 保存
-
-                /convert stop   停止收集，将图片转为视频并打包发送
-
-                示例：
-                /convert start
-                (发送图片...)
-                /convert stop
-
-                注意：此命令仅限私聊使用
-            """)
+            path = f"file://{config.client_base / "helpconvert.png"}"
 
         if subcmd == "randpic":
-            tip = textwrap.dedent("""\
-                /randpic: 随机获取二次元图片并发送
-
-                使用方式：
-                /randpic [选项]
-
-                选项：
-                -n <数字>   设置发送图片数量，范围 1~10，默认为 1
-                -r <模式>   内容模式，默认为 off
-                    off: 启用内容过滤
-                    on:  关闭内容过滤 [仅私聊可用]
-
-                示例：
-                /randpic         获取 1 张图片
-                /randpic -n 3    获取 3 张图片
-
-                注意：-r on 仅限私聊使用
-            """)
+            path = f"file://{config.client_base / "helprandpic.png"}"
 
         if subcmd == "advrandpic":
-            tip = textwrap.dedent("""\
-                /advrandpic: 随机获取二次元图片，支持标签筛选
-
-                使用方式：
-                /advrandpic [选项]
-
-                选项：
-                -n <数字>       设置发送图片数量，范围 1~10，默认为 1
-                -r <模式>       内容模式，默认为 off
-                    off:  启用内容过滤
-                    on:   关闭内容过滤 [仅私聊可用]
-                    only: 仅发送被过滤的内容 [仅私聊可用]
-                -s <质量>       图片质量，默认为 regular
-                    regular:  普通质量
-                    original: 原图质量
-                -t <表达式>     标签筛选表达式，默认为空（不筛选）
-
-                tag表达式写法：
-                | 表示"或"：萝莉|少女 → 有萝莉或少女的标签就行
-                & 表示"与"：白丝&黑丝 → 同时有白丝和黑丝的标签才行
-
-                混合使用时，| 优先结合：萝莉|少女&白丝|黑丝
-                → 先处理 | 得到 (萝莉|少女) 和 (白丝|黑丝)
-                → 再用 & 连接，相当于 (萝莉|少女) 且 (白丝|黑丝)
-                → 最终效果：有(萝莉或少女) 且 有(白丝或黑丝)
-
-                限制：最多 3 个 &，最多 20 个 |
-                ！请勿使用括号，不会改变优先级，还可能让表达式无效
-
-                例子：
-                /advrandpic                   获取 1 张图片
-                /advrandpic -n 3 -s original  获取 3 张原图
-                /advrandpic -n 5 -t 萝莉|少女&白丝|黑丝
-                    获取 (萝莉 或 少女) 且 (白丝 或 黑丝) 的图片，共 5 张
-
-                注意：-r on 和 -r only 仅限私聊使用
-            """)
+            path = f"file://{config.client_base / "helpadvrandpic.png"}"
 
         if subcmd == "shitpost":
-            tip = textwrap.dedent("""\
-                /shitpost: 将消息转发到多个群聊
+            path = f"file://{config.client_base / "helpshitpost.png"}"
 
-                使用方式：
-                /shitpost start <群号1> [群号2] [群号3] ...
-                    开始转发，之后你发送的所有消息都会转发到指定群
+        msg = Message(MessageSegment("image", {"file": path}))
 
-                /shitpost stop
-                    停止转发
-
-                示例：
-                /shitpost start 123456 789012
-                (发送消息...)
-                /shitpost stop
-
-                注意：此命令仅限私聊使用
-                - 至少需要指定 1 个群号
-                - Bot 必须已经在目标群中
-                - 支持文本、图片、视频消息以及合并转发消息
-            """)
-
-        await self._send_msg(tip)
+        await self._send_msg(msg)
         self.unlock()
 
 
@@ -367,7 +261,6 @@ class BotCommandConvert(BotCommand):
                 self.unlock()
                 return
 
-            # Now there are two cases: self_argv is None and new_truthvalues[0], and self._argv is not None and new_truthvaule[1]
             self._argv = new_argv
 
             if subcmd == "start":
@@ -457,7 +350,7 @@ class BotCommandAdvrandpic(BotCommand):
         parser = BotArgParser()
         parser.set_rule(max=0)
         parser.add_opt('-r', required=True, choice=["off", "on", "only"], default=["off"])
-        parser.add_opt('-s', required=True, choice=["original", "regular"], default=["original"])
+        parser.add_opt('-s', required=True, choice=["original", "regular"], default=["regular"])
         parser.add_opt('-t', required=True)
         parser.add_opt('-n', required=True, type=int, default=[1])
         return parser
@@ -518,7 +411,8 @@ class BotCommandAdvrandpic(BotCommand):
         if self._tag is not None: payload['tag'] = self._tag
         headers = {'Content-Type': 'application/json'}
 
-        response = requests.post(api, headers=headers, data=json.dumps(payload))
+        async with httpx.AsyncClient() as client:
+            response = await client.post(api, headers=headers, json=payload)
         if response.status_code != 200:
             logger.error(f"api调用失败，状态码{response.status_code}")
             self.unlock()
@@ -596,7 +490,7 @@ class BotCommandShitpost(BotCommand):
             await self._send_msg(tip)
             self.unlock()
             return
-        # Now there are two cases: self_argv is None and new_truthvalues[0], and self._argv is not None and new_truthvaule[1]
+
         self._argv = new_argv
 
         if subcmd == "start":

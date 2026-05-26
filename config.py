@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 import yaml
 from pydantic import BaseModel
 from typing import Dict, List, Optional
@@ -15,7 +14,7 @@ class ShitBotConfig(BaseModel):
     max_message_depth: int
 
     class Config:
-        arbitrary_types_allowed = True
+        model_config = {"arbitrary_types_allowed": True}
 
     @classmethod
     def from_yaml(cls, file: Path) -> ShitBotConfig:

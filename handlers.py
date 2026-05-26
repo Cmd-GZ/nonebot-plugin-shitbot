@@ -71,8 +71,6 @@ async def shutdown():
         task.cancel()
 
     await asyncio.gather(*tasks, return_exceptions=True)
-    loop = asyncio.get_running_loop()
-    loop.stop()
 
 
 
@@ -81,7 +79,7 @@ cmd_help = cmdRegister("help", BotCommandHelp)
 
 cmd_randpic = cmdRegister("randpic", BotCommandRandpic)
 
-cmd_randpic = cmdRegister("advrandpic", BotCommandAdvrandpic)
+cmd_advrandpic = cmdRegister("advrandpic", BotCommandAdvrandpic)
 
 cmd_convert = cmdRegister("convert", BotCommandConvert, only="private")
 
@@ -167,7 +165,7 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
         await asyncio.sleep(random.randint(30, 120))
 
 
-# Simple auto reply, just for fun :). May be reconstructed in fucture.
+# Simple auto reply, just for fun :). May be reconstructed in future.
 msg_autoreply = on_message(priority=10, block=False)
 @msg_autoreply.handle()
 async def handleMsgAutoreply(bot: Bot, event: MessageEvent):
