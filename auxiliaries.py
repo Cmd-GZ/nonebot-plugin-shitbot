@@ -35,7 +35,7 @@ async def sendMsg(bot: Bot, group_id: str, user_id: str, msg: str | Message):
             return await bot.send_private_msg(user_id=int(user_id), message=msg)
         except Exception as e:
             logger.error(f"发送 {msg} 失败: {e}")
-        return
+            raise
     try:
         return await bot.send_group_msg(group_id=int(group_id), message=msg)
     except Exception as e:

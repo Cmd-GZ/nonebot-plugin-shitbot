@@ -62,19 +62,9 @@ class BotCommand:
     def _init_parser(self):
         return BotArgParser()
 
-    # Return a list with the truth values of arguments where i-th element is true if and only if the format of arguments conform the i-th expression
-    # if necessary, implement it in the subclass like:
-    #    return [
-    #        <the expression of the first case>,
-    #        <the expression of the second case>,
-    #        ...
-    #    ]
-    def _ifLegalGrammars(self, argv: List[str]):
-        return [True]
-
-    # Judge if the arugments is legal based on the truthvalues and send msg if it's illegal
-    async def _legalCase(self, truthvalues: List[bool]):
-        if any(truthvalues): return True
+    # Judge if the arugments is legal based on the parser and send msg if it's illegal
+    async def _legalCase(self, argv: list[str]):
+        if self._parser.is_valid(argv): return True
 
         tip =  "命令格式错误。\n"
         tip += f"输入 /help {self.name} 查看使用方法."
@@ -107,28 +97,26 @@ class BotCommandHelp(BotCommand):
     def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
         super().__init__(bot, session, _internal=_internal)
 
-    def _ifLegalGrammars(self, argv: List[str]):
-        return [
-            len(argv) == 0, # /help
-            len(argv) >= 1 and argv[0] == "help", # /help help ...
-            len(argv) >= 1 and argv[0] == "convert", # /help convert ...
-            len(argv) >= 1 and argv[0] == "randpic", # /help randpic ...
-            len(argv) >= 1 and argv[0] == "advrandpic", # /help advrandpic ...
-            len(argv) >= 1 and argv[0] == "shitpost", # /help shitpost ...
-            True, # /help ...
-        ]
+    def _init_parser(self):
+        parser = BotArgParser()
+        parser.add_subparser('help')
+        parser.add_subparser('convert')
+        parser.add_subparser('randpic')
+        parser.add_subparser('shitpost')
+        parser.add_subparser('advrandpic')
+        return parser
 
     async def run(self, args: Message):
         if not self.session: return
         new_argv = args.extract_plain_text().strip().split()
-        new_truthvalues = self._ifLegalGrammars(new_argv)
-        # I know it's impossble to be true. Just for formalism :)
-        if not await self._legalCase(new_truthvalues):
+        # I know it's impossble to be illegal. Just for formalism :)
+        if not await self._legalCase(new_argv):
             if self._argv is None: self.unlock()
             return
 
         self._argv = new_argv
-        truthvalues = new_truthvalues
+        self._parser.parse_argv(self._argv)
+        subcmd = self._parser.subcmd
 
         tip =  "使用方法：\n"
         tip += "  /help          显示帮助\n"
@@ -140,7 +128,7 @@ class BotCommandHelp(BotCommand):
         tip += "使用例子：\n"
         tip += "  /help help"
 
-        if truthvalues[1]:
+        if subcmd is None:
             tip =  "/help:           显示帮助\n\n"
             tip += "命令格式：\n\n"
             tip += "  /help          显示基础帮助\n\n"
@@ -149,20 +137,23 @@ class BotCommandHelp(BotCommand):
             tip += "使用例子：\n\n"
             tip += "  /help convert  获取 /convert 命令的使用方法"
 
-        if truthvalues[2]:
+        if subcmd == "convert":
             tip =  "/convert:        收集图片并批量转换为视频（仅私聊可用）\n\n"
             tip += "命令格式：\n\n"
             tip += "  /convert start 令 Bot 保存在提示出现后你接下来发送的图片，直至你输入 /convert stop \n\n"
             tip += "  /convert stop  在输入 /convert start 并发送图片后输入， Bot 将停止保存你发送的图片，转而将收集到的图片按顺序转换为视频发送，最后打包发送一个 tar 归档。"
 
-        if truthvalues[3]:
+        if subcmd == "randpic":
             tip =  "/randpic:        随机发送二次元图片\n\n"
             tip += "命令格式：\n\n"
-            tip += "  /randpic unable [数字] 或 /randpic [数字]: 从受限API中随机获取[数字]张二次元图片并发送（不填写默认为1） \n\n"
-            tip += "  /randpic able: 作用同上，但图片是从不受限API中获取的（仅私聊可用）"
-            tip += "  [数字]的范围是1~10，若输入小于1则会取1，若输入大于10则会取10"
+            tip += "  /randpic [选项]: 随机获取二次元图片并发送 \n\n"
+            tip += "选项：\n\n"
+            tip += "    -n <数字>: 设置发送几张图片，范围应在1~10之间，默认为1\n\n"
+            tip += "    -r <模式>: 设置是否限制发送图片的类型，默认为off\n\n"
+            tip += "        -r off: 仅从受限图库中获取图片\n\n"
+            tip += "        -r on: 在整个图库中获取图片（仅私聊可用）\n\n"
 
-        if truthvalues[4]:
+        if subcmd == "advrandpic":
             tip =  "/advrandpic:        随机发送二次元图片\n\n"
             tip += "命令格式：\n\n"
             tip += "  /advrandpic [选项]: 随机获取二次元图片并发送 \n\n"
@@ -185,9 +176,9 @@ class BotCommandHelp(BotCommand):
             tip += "例子: \n\n"
             tip += "    获取3张original质量的图片: /advrandpic -n 3 -s original\n\n"
             tip += "    获取1张全年龄的图片: /advrandpic -r off -n 1 (或 /advrandpic )\n\n"
-            tip += "    获取5张(萝莉或少女)的(白丝或黑丝)的图片: /advrandpic -n 5 -n 萝莉|少女&白丝|黑丝\n\n"
+            tip += "    获取5张(萝莉或少女)的(白丝或黑丝)的图片: /advrandpic -n 5 -t 萝莉|少女&白丝|黑丝\n\n"
 
-        if truthvalues[5]:
+        if subcmd == "shitpost":
             tip =  "/shitpost:        转发信息到多个群聊中（仅私聊可用）\n\n"
             tip += "命令格式：\n\n"
             tip += "  /convert start <群号1> <群号2> ...:  令 Bot 转发在提示出现后你接下来发送的信息到你指定的群聊，直至你输入 /shitpost stop \n\n"
@@ -234,11 +225,14 @@ class BotCommandConvert(BotCommand):
     def copy_lock(self):
         return self._copy_lock
 
-    def _ifLegalGrammars(self, argv: List[str]):
-        return [
-            len(argv) == 1 and argv[0] == "start", # /convert start
-            len(argv) == 1 and argv[0] == "stop", # /convert stop
-        ]
+    def _init_parser(self):
+        parser = BotArgParser()
+        start = parser.add_subparser('start')
+        stop = parser.add_subparser('stop')
+        start.set_rule(max=0)
+        stop.set_rule(max=0)
+        parser.set_rule(max=0, need_subcmd=True)
+        return parser
 
     async def _convertStart(self):
         if not self.session: return
@@ -293,19 +287,21 @@ class BotCommandConvert(BotCommand):
             if not self.session: return
 
             new_argv = args.extract_plain_text().strip().split()
-            new_truthvalues = self._ifLegalGrammars(new_argv)
-            if not await self._legalCase(new_truthvalues):
+            if not await self._legalCase(new_argv):
                 if self._argv is None: self.unlock()
                 return
 
-            if self._argv is not None and new_truthvalues[0]:
+            self._parser.parse_argv(new_argv)
+            subcmd = self._parser.subcmd
+
+            if self._argv is not None and subcmd == "start":
                 if not self.session.command: return
                 tip =  "错误：会话被占用\n"
                 tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
                 await self._send_msg(tip)
                 return
 
-            if self._argv is None and new_truthvalues[1]:
+            if self._argv is None and subcmd == "stop":
                 tip =  "错误：会话未开始\n"
                 tip += f"你还没有开始收集图片，请先使用 /convert start 。"
                 await self._send_msg(tip)
@@ -314,13 +310,12 @@ class BotCommandConvert(BotCommand):
 
             # Now there are two cases: self_argv is None and new_truthvalues[0], and self._argv is not None and new_truthvaule[1]
             self._argv = new_argv
-            truthvalues = new_truthvalues
 
-            if truthvalues[0]:
+            if subcmd == "start":
                 await self._convertStart()
                 return
 
-            if truthvalues[1]:
+            if subcmd == "stop":
                 await self._convertStop()
                 return
 
@@ -330,22 +325,18 @@ class BotCommandRandpic(BotCommand):
     def __init__(self, bot: Bot, session: BotSession, *, _internal=None):
         super().__init__(bot, session, _internal=_internal)
 
-    def _ifLegalGrammars(self, argv: List[str]):
-        return [
-            len(argv) == 0, # /randpic
-            len(argv) == 1 and argv[0].isdigit(), # /randpic <number>
-            len(argv) == 1 and argv[0] == "unable", # /randpic unable
-            len(argv) == 2 and argv[0] == "unable" and argv[1].isdigit(), # /randpic unable <number>
-            len(argv) == 1 and argv[0] == "able", # /randpic able
-            len(argv) == 2 and argv[0] == "able" and argv[1].isdigit(), # /randpic able <number>
-        ]
+    def _init_parser(self):
+        parser = BotArgParser()
+        parser.set_rule(max=0)
+        parser.add_opt('-r', required=True, choice=["off", "on"], default=["off"])
+        parser.add_opt('-n', required=True, type=int, default=[1])
+        return parser
 
     async def run(self, args: Message):
         if not self.session: return
 
         new_argv = args.extract_plain_text().strip().split()
-        new_truthvalues = self._ifLegalGrammars(new_argv)
-        if not await self._legalCase(new_truthvalues):
+        if not await self._legalCase(new_argv):
             if self._argv is None: self.unlock()
             return
 
@@ -357,15 +348,15 @@ class BotCommandRandpic(BotCommand):
             return
 
         self._argv = new_argv
-        truthvalues = new_truthvalues
+        self._parser.parse_argv(self._argv)
+        if self._parser.opts_value['-r'] is None or self._parser.opts_value['-n'] is None: return # It's impossible, just for type checking
+        r18 = self._parser.opts_value['-r'][0]
+        num = self._parser.opts_value['-n'][0]
 
-        num = 1
-        if truthvalues[1]: num = int(self._argv[0])
-        if truthvalues[3] or truthvalues[5]: num = int(self._argv[1])
         if num < 1: num = 1
         if num > 10: num = 10
 
-        if (truthvalues[4] or truthvalues[5]) and self.session.group_id != "private":
+        if r18 == "on" and self.session.group_id != "private":
             tip = "该功能只能在私聊中使用"
             await self._send_msg(tip)
             self.unlock()
@@ -376,9 +367,8 @@ class BotCommandRandpic(BotCommand):
             self.unlock()
             return
 
-        if truthvalues[0] or truthvalues[1] or truthvalues[2] or truthvalues[3]:
-            api = "https://manyacg.top/setu"
-        else:
+        api = "https://manyacg.top/setu"
+        if r18 == "on":
             if self.session.user_id not in config.whitelist_users_setu:
                 self.unlock()
                 return
@@ -404,67 +394,20 @@ class BotCommandAdvrandpic(BotCommand):
         self._tag = None
         self._size = "regular"
 
-    def _ifLegalGrammars(self, argv: List[str]):
-        def _idx(elem):
-            try:
-                return argv.index(elem)
-            except ValueError:
-                return -1
-        l = len(argv)
-        arg_r = _idx("-r")+1
-        arg_n = _idx("-n")+1
-        arg_t = _idx("-t")+1
-        arg_s = _idx("-s")+1
-        temp_truthvalue = [
-            l == 0, # /advrandpic
-            arg_r > 0 and arg_r < l and argv[arg_r] == "off", # /advrandpic ... -r off ...
-            arg_r > 0 and arg_r < l and argv[arg_r] == "on", # /advrandpic ... -r on ...
-            arg_r > 0 and arg_r < l and argv[arg_r] == "only", # /advrandpic ... -r only ...
-            arg_n > 0 and arg_n < l and argv[arg_n].isdigit(), # /advrandpic ... -n <num> ...
-            arg_t > 0 and arg_t < l, # /advrandpic ... -t <tag> ...
-            arg_s > 0 and arg_s < l and argv[arg_s] == "regular", # /advrandpic -s regular
-            arg_s > 0 and arg_s < l and argv[arg_s] == "original", # /advrandpic -s original
-        ]
-
-        and_truthvalue = [
-            (
-                (arg_n <= 0 or temp_truthvalue[4]) and
-                (arg_t <= 0 or temp_truthvalue[5]) and
-                (arg_s <= 0 or any(temp_truthvalue[5:7]))
-            ), # -r
-            (
-                (arg_r <= 0 or any(temp_truthvalue[1:4])) and
-                (arg_t <= 0 or temp_truthvalue[5]) and
-                (arg_s <= 0 or any(temp_truthvalue[5:7]))
-            ), # -n
-            (
-                (arg_r <= 0 or any(temp_truthvalue[1:4])) and
-                (arg_n <= 0 or temp_truthvalue[4]) and
-                (arg_s <= 0 or any(temp_truthvalue[5:7]))
-            ), # -t
-            (
-                (arg_r <= 0 or any(temp_truthvalue[1:4])) and
-                (arg_n <= 0 or temp_truthvalue[4]) and
-                (arg_t <= 0 or temp_truthvalue[5])
-            ) # -s
-        ]
-        return [
-            temp_truthvalue[0], # /advrandpic
-            and_truthvalue[0] and temp_truthvalue[1], # /advrandpic ... -r off ...
-            and_truthvalue[0] and temp_truthvalue[2], # /advrandpic ... -r on ...
-            and_truthvalue[0] and temp_truthvalue[3], # /advrandpic ... -r only ...
-            and_truthvalue[1] and temp_truthvalue[4], # /advrandpic ... -n <num> ...
-            and_truthvalue[2] and temp_truthvalue[5], # /advrandpic ... -t <tag> ...
-            and_truthvalue[3] and temp_truthvalue[6], # /advrandpic -s regular
-            and_truthvalue[3] and temp_truthvalue[7], # /advrandpic -s original
-        ]
+    def _init_parser(self):
+        parser = BotArgParser()
+        parser.set_rule(max=0)
+        parser.add_opt('-r', required=True, choice=["off", "on", "only"], default=["off"])
+        parser.add_opt('-s', required=True, choice=["original", "regular"], default=["original"])
+        parser.add_opt('-t', required=True)
+        parser.add_opt('-n', required=True, type=int, default=[1])
+        return parser
 
     async def run(self, args: Message):
         if not self.session: return
 
         new_argv = args.extract_plain_text().strip().split()
-        new_truthvalues = self._ifLegalGrammars(new_argv)
-        if not await self._legalCase(new_truthvalues):
+        if not await self._legalCase(new_argv):
             if self._argv is None: self.unlock()
             return
 
@@ -476,23 +419,28 @@ class BotCommandAdvrandpic(BotCommand):
             return
 
         self._argv = new_argv
-        truthvalues = new_truthvalues
+        self._parser.parse_argv(self._argv)
+        if self._parser.opts_value['-r'] is None or self._parser.opts_value['-s'] is None or self._parser.opts_value['-n'] is None: # It's impossible
+            return
 
-        if (truthvalues[2] or truthvalues[3]) and self.session.group_id != "private":
+        r18 = self._parser.opts_value['-r'][0]
+        if r18 != "off" and self.session.group_id != "private":
             tip = "该功能只能在私聊中使用"
             await self._send_msg(tip)
             self.unlock()
             return
+        if r18 == "off": self._r18 = 0
+        if r18 == "on": self._r18 = 2
+        if r18 == "only": self._r18 = 1
 
-        if truthvalues[1]: self._r18 = 0
-        if truthvalues[2]: self._r18 = 2
-        if truthvalues[3]: self._r18 = 1
-        if truthvalues[4]: self._num =int(self._argv[self._argv.index("-n")+1])
-        if truthvalues[5]: self._tag =self._argv[self._argv.index("-t")+1].split('&')
-        if any([truthvalues[6], truthvalues[7]]): self._size = self._argv[self._argv.index("-s")+1]
+        tags = self._parser.opts_value['-t']
+        if tags is not None: self._tag =tags[0].split('&')
 
+        self._num = self._parser.opts_value['-n'][0]
         if self._num < 1: self._num = 1
         if self._num > 10: self._num = 10
+
+        self._size = self._parser.opts_value['-s'][0]
 
         if self.session.group_id not in config.whitelist_groups_setu:
             self.unlock()
@@ -557,28 +505,33 @@ class BotCommandShitpost(BotCommand):
     def event(self):
         return self._event
 
-    def _ifLegalGrammars(self, argv: List[str]):
-        return [
-            len(argv) >= 2 and argv[0] == "start" and all(arg.isdigit() for arg in argv[1:]), # /shitpost start [<group_id>]
-            len(argv) == 1 and argv[0] == "stop", # /shitpost stop
-        ]
+    def _init_parser(self):
+        parser = BotArgParser()
+        parser.set_rule(max=0, need_subcmd=True)
+        start = parser.add_subparser("start")
+        stop = parser.add_subparser("stop")
+        start.set_rule(min=1, types=[int])
+        stop.set_rule(max=0)
+        return parser
 
     async def run(self, args: Message):
         if not self.session: return
         new_argv = args.extract_plain_text().strip().split()
-        new_truthvalues = self._ifLegalGrammars(new_argv)
-        if not await self._legalCase(new_truthvalues):
+        if not await self._legalCase(new_argv):
             if self._argv is None: self.unlock()
             return
 
-        if self._argv is not None and new_truthvalues[0]:
+        self._parser.parse_argv(new_argv)
+        subcmd = self._parser.subcmd
+
+        if self._argv is not None and subcmd == "start":
             if not self.session.command: return
             tip =  "错误：会话被占用\n"
             tip += f"命令 {self.session.command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
             await self._send_msg(tip)
             return
 
-        if self._argv is None and new_truthvalues[1]:
+        if self._argv is None and subcmd == "stop":
             tip =  "错误：会话未开始"
             tip += "我还没吃上呢你着急啥，先输入 /shitpost start <群号1> <群号2> ... 开始搬石。"
             await self._send_msg(tip)
@@ -586,10 +539,9 @@ class BotCommandShitpost(BotCommand):
             return
         # Now there are two cases: self_argv is None and new_truthvalues[0], and self._argv is not None and new_truthvaule[1]
         self._argv = new_argv
-        truthvalues = new_truthvalues
 
-        if truthvalues[0]:
-            groups = [int(arg) for arg in self._argv[1:]]
+        if subcmd == "start":
+            groups = self._parser._subparsers[subcmd].value
             exist_groups = await self.bot.get_group_list()
             for group in groups:
                 if all(group != exist_group['group_id'] for exist_group in exist_groups):
@@ -604,7 +556,7 @@ class BotCommandShitpost(BotCommand):
             await self._send_msg("消息转发已开启，请将你要搬的史发给我。")
             return
 
-        if truthvalues[1]:
+        if subcmd == "stop":
             self._is_forwardable = False
             await self._send_msg("豪赤，下回要搬的时候记得再叫我。")
             self.unlock()

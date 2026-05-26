@@ -56,11 +56,12 @@ class BotArgParser:
             'default': default
         }
 
-    def set_rule(self, *, min: int = 0, max: int | None = None, types: list[type] = [str]):
+    def set_rule(self, *, min: int = 0, max: int | None = None, types: list[type] = [str], need_subcmd: bool = False):
         self._rule = {
             'min': min,
             'max': max,
             'types': types,
+            'need_subcmd': need_subcmd,
         }
 
     def _is_int(self, s: str) -> bool:
@@ -70,16 +71,16 @@ class BotArgParser:
         except ValueError:
             return False
 
-    def _partition(self, args: list[str]) -> tuple[list[list[str]], str | None, list[str]]:
+    def _partition(self, argv: list[str]) -> tuple[list[list[str]], str | None, list[str]]:
         subparsers = self._subparsers.keys()
-        ownargs = args
+        ownargv = argv
         subcmd = None
-        subargs = []
-        for i in range(len(args)):
-            if args[i] in subparsers:
-                subcmd = args[i]
-                ownargs = args[:i]
-                subargs = args[i+1:]
+        subargv = []
+        for i in range(len(argv)):
+            if argv[i] in subparsers:
+                subcmd = argv[i]
+                ownargv = argv[:i]
+                subargv = argv[i+1:]
                 break
 
         options = self._opts_rule.keys()
@@ -87,18 +88,18 @@ class BotArgParser:
         partitioned = []
 
         prev = 0
-        for i in range(len(ownargs)):
-            if ownargs[i] in options:
-                if options_count[ownargs[i]] >= self._opts_rule[ownargs[i]]['max_appeared']:
+        for i in range(len(ownargv)):
+            if ownargv[i] in options:
+                if options_count[ownargv[i]] >= self._opts_rule[ownargv[i]]['max_appeared']:
                     continue
-                options_count[ownargs[i]] += 1
-                partitioned.append(ownargs[prev:i])
+                options_count[ownargv[i]] += 1
+                partitioned.append(ownargv[prev:i])
                 prev = i
-        partitioned.append(ownargs[prev:])
-        return (partitioned, subcmd, subargs)
+        partitioned.append(ownargv[prev:])
+        return (partitioned, subcmd, subargv)
 
-    def is_valid(self, args: list[str]) -> bool:
-        partitioned, subcmd, subargs = self._partition(args)
+    def is_valid(self, argv: list[str]) -> bool:
+        partitioned, subcmd, subargv = self._partition(argv)
         lenp = len(partitioned)
         if lenp == 0: return False
         if lenp >= 2 and partitioned[0] != []:
@@ -144,21 +145,23 @@ class BotArgParser:
         if necessary_options:
             return False
 
+        if subcmd is None and self._rule['need_subcmd']: return False
+
         if subcmd is not None:
             if subcmd not in self._subparsers: return False
-            if not self._subparsers[subcmd].is_valid(subargs): return False
+            if not self._subparsers[subcmd].is_valid(subargv): return False
 
         return True
 
-    def parse_args(self, args: list[str]):
-        if not self.is_valid(args):
+    def parse_argv(self, argv: list[str]):
+        if not self.is_valid(argv):
             raise ValueError("Invalid arguments")
 
         self._opts_value = {}
         self._value = []
         self._subcmd = None
 
-        partitioned, subcmd, subargs = self._partition(args)
+        partitioned, subcmd, subargv = self._partition(argv)
         options = self._opts_rule.keys()
 
         partitioned_last = partitioned.pop(-1)
@@ -196,5 +199,5 @@ class BotArgParser:
 
         if subcmd is not None:
             self._subcmd = subcmd
-            self._subparsers[subcmd].parse_args(subargs)
+            self._subparsers[subcmd].parse_argv(subargv)
 
