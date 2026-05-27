@@ -90,6 +90,8 @@ cmd_convert = cmdRegister("convert", BotCommandConvert, only="private")
 
 cmd_shitpost = cmdRegister("shitpost", BotCommandShitpost, only="private")
 
+cmd_md2pic = cmdRegister("md2pic", BotCommandMd2pic)
+
 cmd_otherwise = cmdRegister("", BotCommand, priority=3)
 
 # ===Messages handlers=== #

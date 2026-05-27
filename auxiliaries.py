@@ -8,9 +8,13 @@ from typing import Any
 from nonebot.log import logger
 from nonebot.adapters.onebot.v11.event import Reply
 from nonebot.adapters.onebot.v11 import Bot, Event, MessageEvent, MessageSegment, Message
-
 from .config import getConfig
 config = getConfig()
+
+def calc_md_width(md_text: str, *, min_w: int = 20, max_w: int = 1000, char_px: int = 15) -> int:
+    lines = md_text.split("\n")
+    max_chars = max((len(line.rstrip()) for line in lines), default=0)
+    return max(min_w, min(max_w, max_chars * char_px))
 
 async def rmPath(path: Path):
     if not path.exists(): return
