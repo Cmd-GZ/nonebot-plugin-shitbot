@@ -71,6 +71,13 @@ class BotArgParser:
         except ValueError:
             return False
 
+    def _is_float(self, s: str) -> bool:
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False
+
     def _partition(self, argv: list[str]) -> tuple[list[list[str]], str | None, list[str]]:
         subparsers = self._subparsers.keys()
         ownargv = argv
@@ -116,6 +123,8 @@ class BotArgParser:
             if not self._opts_rule[sublist[0]]['required'] and l == 2: return False
             if l == 2 and self._opts_rule[sublist[0]]['type'] == int and not self._is_int(sublist[1]):
                 return False
+            if l == 2 and self._opts_rule[sublist[0]]['type'] == float and not self._is_float(sublist[1]):
+                return False
             if l == 2 and self._opts_rule[sublist[0]]['choice'] is not None and sublist[1] not in self._opts_rule[sublist[0]]['choice']:
                 return False
             if sublist[0] in necessary_options:
@@ -126,6 +135,8 @@ class BotArgParser:
             if partitioned_last[0] not in options: return False
             if self._opts_rule[partitioned_last[0]]['required'] and len(partitioned_last) == 1: return False
             if self._opts_rule[partitioned_last[0]]['required'] and self._opts_rule[partitioned_last[0]]['type'] == int and not self._is_int(partitioned_last[1]):
+                return False
+            if self._opts_rule[partitioned_last[0]]['required'] and self._opts_rule[partitioned_last[0]]['type'] == float and not self._is_float(partitioned_last[1]):
                 return False
             if self._opts_rule[partitioned_last[0]]['required'] and self._opts_rule[partitioned_last[0]]['choice'] is not None and partitioned_last[1] not in self._opts_rule[partitioned_last[0]]['choice']:
                 return False
@@ -140,6 +151,8 @@ class BotArgParser:
             if self._rule['types'] is None: break
             index = i if i < len(self._rule['types']) else len(self._rule['types']) - 1
             if self._rule['types'][index] == int and not self._is_int(partitioned_last[i]):
+                return False
+            if self._rule['types'][index] == float and not self._is_float(partitioned_last[i]):
                 return False
 
         if necessary_options:
@@ -180,6 +193,8 @@ class BotArgParser:
                 value = sublist[1]
                 if self._opts_rule[option]['type'] == int:
                     value = int(value)
+                if self._opts_rule[option]['type'] == float:
+                    value = float(value)
             else:
                 value = True
             opt_values = self._opts_value.get(option)
@@ -193,6 +208,8 @@ class BotArgParser:
             value = partitioned_last[i]
             if self._rule['types'][index] == int:
                 value = int(value)
+            if self._rule['types'][index] == float:
+                value = float(value)
             self._value.append(value)
 
         for option in options:

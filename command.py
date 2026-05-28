@@ -73,13 +73,15 @@ class BotCommand:
     def _init_parser(self):
         return BotArgParser()
 
-    # Judge if the arguments is legal based on the parser and send msg if it's illegal
-    async def _legalCase(self, argv: list[str]):
-        if self._parser.is_valid(argv): return True
-
+    async def _send_format_error(self):
         tip =  "命令格式错误。\n"
         tip += f"输入 /help {self.name} 查看使用方法."
         await self._send_msg(tip)
+
+    # Judge if the arguments is legal based on the parser and send msg if it's illegal
+    async def _legalCase(self, argv: list[str]):
+        if self._parser.is_valid(argv): return True
+        await self._send_format_error()
         return False
 
     async def _send_msg(self, msg: str | Message):
@@ -363,22 +365,41 @@ class BotCommandHelp(BotCommand):
         if subcmd == "md2pic":
             tip = textwrap.dedent("""\
                 ```bash
-                用法: /md2pic [选项] (换行)
+                用法: /md2pic < -c > [选项] (换行)
                         <markdown文本>
 
                 选项:
-                    暂无
-
-                示例:
-                    /md2pic
+                    -c: 占位符, 用于分割参数项与Markdown正文, 为必填项
+                    -s <倍率>: 设置缩放倍率, 可填小数, 数值越大生成的图片越清晰, 数值应在0~10之间, 默认为2
+                    -t <渲染主题>: 指定渲染主题, 默认为 github-markdown-dark-dimmed
+                    --padding <留空像素>: 设置渲染结果四周留空的宽度像素, 默认为 30
+                    --min_w <宽度像素>: 设置最小宽度像素, 默认为 20
+                    --max_w <宽度像素>: 设置最大宽度像素, 该值会影响Markdown排版, 默认为 2000
+                    --min_h <高度像素>: 设置最小高度像素, 默认为 20
+                    --max_h <高度像素>: 设置最大宽度像素, 默认为 无限
+                注意: --padding, --min_w, --max_w, --min_h, max_h 均只能填入正整数
+                示例1: 按默认参数输出Markdown文本
+                    /md2pic -c
                     # Title
-
                     Hello World
-                                    输出大标题Title+正文Hello World的Markdown对应的图片
                 ```
+                # Title
+                Hello World
+                ```bash
+                示例2: 按缩放倍率 5.14, 用 github-markdown-dark-dimmed 主题输出行间公式
+                    /md2pic -s 5.14 -c -t github-markdown-dark-dimmed
+                    $$
+                    天^{-1}\\in\\R\\\\
+                    \\text{属实逆天}
+                    $$
+                ```
+                $$
+                天^{-1}\\in\\R\\\\
+                \\text{属实逆天}
+                $$
             """)
 
-        img = await md_to_pic_auto_size(tip, css_path=str(Path(__file__).resolve().parent / "mdtheme.css"))
+        img = await md_to_pic_auto_size(tip, css_path=str(Path(__file__).resolve().parent / "css" / "github-markdown-dark-dimmed.css"))
         msg = Message(MessageSegment.image(img))
 
         await self._send_msg(msg)
@@ -780,12 +801,26 @@ class BotCommandMd2pic(BotCommand):
     def _init_parser(self):
         parser = BotArgParser()
         parser.set_rule(min=1,max=1)
+        parser.add_opt('-c', necessary=True)
+        parser.add_opt('-s', required=True, type=float, default=[2])
+        parser.add_opt('-t', required=True, choice=["github-markdown-dark-dimmed"], default=["github-markdown-dark-dimmed"])
+        parser.add_opt('--padding', required=True, type=int, default=[30])
+        parser.add_opt('--min_w', required=True, type=int, default=[20])
+        parser.add_opt('--max_w', required=True, type=int, default=[2000])
+        parser.add_opt('--min_h', required=True, type=int, default=[20])
+        parser.add_opt('--max_h', required=True, type=int, default=None)
+
         return parser
 
     async def run(self, args: Message):
         if not self.session: return
-
-        new_argv = [args.extract_plain_text().lstrip()]
+        new_argss = args.extract_plain_text().split('\n', 1)
+        if len(new_argss) < 2:
+            await self._send_format_error()
+            if self._argv is None: self.unlock()
+            return
+        new_argv = new_argss[0].strip().split()
+        new_argv.append(new_argss[1])
         if not await self._legalCase(new_argv):
             if self._argv is None: self.unlock()
             return
@@ -801,8 +836,37 @@ class BotCommandMd2pic(BotCommand):
         self._argv = new_argv
         self._parser.parse_argv(self._argv)
 
+        scale = self._parser.opts_value['-s'][0] # type: ignore[index]
+        theme = self._parser.opts_value['-t'][0] # type: ignore[index]
+        side_padding = self._parser.opts_value['--padding'][0] # type: ignore[index]
+        min_w = self._parser.opts_value['--min_w'][0] # type: ignore[index]
+        max_w = self._parser.opts_value['--max_w'][0] # type: ignore[index]
+        min_h = self._parser.opts_value['--min_h'][0] # type: ignore[index]
+        max_h = self._parser.opts_value['--max_h'][0] if self._parser.opts_value['--max_h'] is not None else None
         md = self._parser.value[0]
-        img = await md_to_pic_auto_size(md, css_path=str(Path(__file__).resolve().parent / "mdtheme.css"))
+
+        side_padding = max(0, side_padding)
+        side_padding = min(10, side_padding)
+        max_w = min(10000000, max_w)
+        max_w = max(0, max_w)
+        min_w = min(max_w, min_w)
+        min_w = max(0, min_w)
+        if max_h is not None:
+            max_h = min(10000000, max_h)
+            max_h = max(0, max_h)
+            min_h = min(max_h, min_h)
+        min_h = max(0, min_h)
+
+        img = await md_to_pic_auto_size(
+                md,
+                device_scale_factor=scale,
+                css_path=str(Path(__file__).resolve().parent / "css" / f"{theme}.css"),
+                side_padding=side_padding,
+                min_w=min_w,
+                max_w=max_w,
+                min_h=min_h,
+                max_h=max_h,
+            )
 
         msg = Message(MessageSegment.image(img))
         await self._send_msg(msg)
