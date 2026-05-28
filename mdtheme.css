@@ -1,4 +1,3 @@
-@import 'redrail-night/fonts.css';
 :root {
     /*Left sidebar color*/
     /*--side-bar-bg-color: #fff;*/
@@ -79,15 +78,6 @@ body {
     background-color: #383737;
 }
 
-/*font color of Inline Code in source code mode*/
-.cm-s-typora-default .cm-comment{
-    color: #eebdbd;
-}
-
-/*Right scrollbar color*/
-::-webkit-scrollbar-thumb{
-    background: #cdcbcb;
-}
 
 #write {
     max-width: 1920px;
@@ -255,10 +245,6 @@ h2 {
     border-bottom: 1px solid var(--main-6);
 }
 
-h2::before {
-    content: '# '!important;
-    color: #f22f27;
-}
 
 h3 {
     font-size: 1.4em;
@@ -269,15 +255,6 @@ h3 {
 }
 
 
-/* Level 3 and 4 titles after clicking the left prompt icon */
-
-#write>h3.md-focus:before,
-#write>h4.md-focus:before {
-    width: auto;
-    height: auto;
-    background-color: var(--main-5);
-    color: var(--mid-1);
-}
 
 h4 {
     margin-top: 0.5em;
@@ -313,15 +290,6 @@ h4 {
     font-size: 1rem;
 }
 
-#write h5::before {
-    content: 'H5';
-    top: 0.18rem;
-}
-
-#write h6::before {
-    content: 'H6';
-    top: 0.18rem;
-}
 
 p,
 blockquote,
@@ -498,11 +466,6 @@ table tr td:last-child {
 } */
 
 
-/* 行号左框线 */
-
-#write .CodeMirror-gutters {
-    border-right: 1px solid rgba(204, 51, 0);
-}
 
 
 /* 代码框 */
@@ -732,149 +695,9 @@ tt {
     background-color: #f8f8f8;
 } */
 
-#write pre.md-meta-block {
-    /* padding: 1rem; */
-    font-size: 85%;
-    line-height: 1.45;
-    background-color: #f7f7f7;
-    border: 0;
-    border-radius: 3px;
-    color: #777777;
-    margin-top: 0 !important;
-}
-
-.mathjax-block>.code-tooltip {
-    bottom: .375rem;
-    /* bottom: .575rem; */
-}
-
-#write>h3.md-focus:before {
-    left: -1.5625rem;
-    top: .375rem;
-}
-
-#write>h4.md-focus:before {
-    left: -1.5625rem;
-    top: .285714286rem;
-}
-
-#write>h5.md-focus:before {
-    left: -1.5625rem;
-    top: .285714286rem;
-}
-
-#write>h6.md-focus:before {
-    left: -1.5625rem;
-    top: .285714286rem;
-}
 
 
-/*--- 图片 ---*/
 
-.md-image {
-    margin: 24px auto;
-    border-radius: 4px;
-}
-
-.md-image img {
-    border-radius: 4px;
-}
-
-
-/* 当 “![shadow-随便写]()”写时，会有阴影 */
-
-.md-image img[alt|='shadow'] {
-    /* box-shadow: 0 4px 24px -6px #ddd; */
-    box-shadow: #84A1A8 0px 10px 15px;
-}
-
-.md-image>.md-meta {
-    border-radius: 3px;
-    font-family: Consolas, 'Liberation Mono', Courier, monospace;
-    padding: 2px 0 0 4px;
-    font-size: 0.9em;
-    color: inherit;
-}
-
-.md-tag {
-    color: inherit;
-}
-
-.md-toc {
-    margin-top: 20px;
-    padding-bottom: 20px;
-}
-
-.sidebar-tabs {
-    border-bottom: none;
-}
-
-#typora-quick-open {
-    border: 1px solid #ddd;
-    background-color: #f8f8f8;
-}
-
-#typora-quick-open-item {
-    background-color: #FAFAFA;
-    border-color: #FEFEFE #e5e5e5 #e5e5e5 #eee;
-    border-style: solid;
-    border-width: 1px;
-}
-
-#md-notification:before {
-    top: 10px;
-}
-
-
-/** focus mode */
-
-.on-focus-mode blockquote {
-    border-left-color: rgba(85, 85, 85, 0.12);
-}
-
-header,
-.context-menu,
-.megamenu-content,
-footer {
-    font-family: 'Segoe UI', 'Arial', sans-serif;
-}
-
-.file-node-content:hover .file-node-icon,
-.file-node-content:hover .file-node-open-state {
-    visibility: visible;
-}
-
-.mac-seamless-mode #typora-sidebar {
-    background-color: var(--side-bar-bg-color);
-}
-
-.md-lang {
-    color: #b4654d;
-}
-
-.html-for-mac .context-menu {
-    --item-hover-bg-color: #e6f0fe;
-}
-
-
-/* 侧边栏 */
-
-/* 侧边栏下方“操作、排序、最近使用的目录”的颜色 */
-#sidebar-files-menu.dropdown-menu>li>a {
-    color: #CDCBCB;
-}
-
-.file-list-item.active {
-    background: var(--active-file-bg-color);
-    color: var(--active-file-text-color);
-    border-left: 4px solid var(--main-6);
-}
-
-.file-tree-node.active>.file-node-background {
-    background-color: var(--active-file-bg-color);
-    border-left: 4px solid var(--main-6);
-    border-color: var(--active-file-border-color);
-}
 
 @media print {
     .typora-export * {
@@ -910,7 +733,8 @@ footer {
    ═══════════════════════════════════════════════════ */
 
 .codehilite .hll { background-color: #49483e }
-.codehilite { background: #2b2b2b; color: #F8F8F2 }
+.codehilite { background: #2b2b2b; color: #F8F8F2; padding: 4px 8px; border-radius: 2px; }
+.codehilite pre { padding-top: 0; padding-bottom: 0; }
 .codehilite .c { color: #959077 }           /* Comment */
 .codehilite .err { color: #ED007E }          /* Error */
 .codehilite .k { color: #66D9EF }            /* Keyword */

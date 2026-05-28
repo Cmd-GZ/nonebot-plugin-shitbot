@@ -10,6 +10,10 @@
 
 - 半自动搬史
 
+- Markdown渲染
+
+- 用户多命令管理
+
 ## TODO List（大致按优先级排序 但随缘想先解决哪个就解决哪个）
 
 - 处理代码命名规范还有加注释 完善配置文件以及目录结构 按照nonebot所说的插件规范修改（？）
@@ -50,3 +54,8 @@
 
 - [ManyACG](https://manyacg.top): 为 /randpic 提供了API
 - [Lolicon APP](https://lolicon.app): 为 /advrandpic 提供了API
+- [typora-theme-redrail](https://github.com/airyv/typora-theme-redrail): 为markdown渲染提供了CSS主题
+- [Pygments Monokai](https://gist.github.com/theironsamurai/ed4e89a7978e98e7fdda): 为markdown代码高亮提供CSS主题
+
+
+![pic](https://manyacg.top/setu)

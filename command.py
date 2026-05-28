@@ -16,10 +16,9 @@ from nonebot.adapters.onebot.v11 import Bot, MessageSegment, Message
 from nonebot.log import logger
 
 require("nonebot_plugin_htmlrender")
-from nonebot_plugin_htmlrender import md_to_pic
 
 from .parser import BotArgParser
-from .auxiliaries import rmPath, convertCleanup, sendMsg, stuffDownload, calc_md_width
+from .auxiliaries import rmPath, convertCleanup, sendMsg, stuffDownload, md_to_pic_auto_size
 from .tasks import convertPng2V, convertP2Png
 from .config import getConfig
 config = getConfig()
@@ -180,6 +179,7 @@ class BotCommandHelp(BotCommand):
         parser.add_subparser('randpic')
         parser.add_subparser('shitpost')
         parser.add_subparser('advrandpic')
+        parser.add_subparser('md2pic')
         return parser
 
     async def run(self, args: Message):
@@ -203,6 +203,7 @@ class BotCommandHelp(BotCommand):
             /randpic     随机获取二次元图片
             /advrandpic  随机获取二次元图片，支持指定标签
             /shitpost    将消息转发到多个群聊（仅私聊）
+            /md2pic      将markdown文本转换为图片输出
 
             示例：
             /help help     查看 /help 的用法
@@ -359,7 +360,25 @@ class BotCommandHelp(BotCommand):
                 ```
             """)
 
-        img = await md_to_pic(tip, width=calc_md_width(tip), css_path=str(Path(__file__).resolve().parent / "mdtheme.css"))
+        if subcmd == "md2pic":
+            tip = textwrap.dedent("""\
+                ```bash
+                用法: /md2pic [选项] (换行)
+                        <markdown文本>
+
+                选项:
+                    暂无
+
+                示例:
+                    /md2pic
+                    # Title
+
+                    Hello World
+                                    输出大标题Title+正文Hello World的Markdown对应的图片
+                ```
+            """)
+
+        img = await md_to_pic_auto_size(tip, css_path=str(Path(__file__).resolve().parent / "mdtheme.css"))
         msg = Message(MessageSegment.image(img))
 
         await self._send_msg(msg)
@@ -783,7 +802,7 @@ class BotCommandMd2pic(BotCommand):
         self._parser.parse_argv(self._argv)
 
         md = self._parser.value[0]
-        img = await md_to_pic(md, width=calc_md_width(md), css_path=str(Path(__file__).resolve().parent / "mdtheme.css"))
+        img = await md_to_pic_auto_size(md, css_path=str(Path(__file__).resolve().parent / "mdtheme.css"))
 
         msg = Message(MessageSegment.image(img))
         await self._send_msg(msg)
