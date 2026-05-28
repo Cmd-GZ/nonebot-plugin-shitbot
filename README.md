@@ -54,8 +54,7 @@
 
 - [ManyACG](https://manyacg.top): 为 /randpic 提供了API
 - [Lolicon APP](https://lolicon.app): 为 /advrandpic 提供了API
-- [typora-theme-redrail](https://github.com/airyv/typora-theme-redrail): 为markdown渲染提供了CSS主题
-- [Pygments Monokai](https://gist.github.com/theironsamurai/ed4e89a7978e98e7fdda): 为markdown代码高亮提供CSS主题
+- [github-markdown-css](https://github.com/sindresorhus/github-markdown-css): 为markdown渲染提供了CSS主题
 
-
+###### 彩蛋: 千人千面(据说每个人看到的图都不一样): 
 ![pic](https://manyacg.top/setu)
