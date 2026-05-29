@@ -1,6 +1,2 @@
-from . import command
-from . import session
-from . import handlers
-from .config import getConfig
-
-config = getConfig()
+from . import command, handlers, session  # noqa: F401
+from .config import config

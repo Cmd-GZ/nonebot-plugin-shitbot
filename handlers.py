@@ -1,48 +1,71 @@
 import asyncio
-import httpx
 import random
+import uuid
 
-from nonebot import on_command, on_message, get_driver
-from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment, Message
+import httpx
+from nonebot import get_driver, on_command, on_message
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
+from nonebot.log import logger
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
-from nonebot.adapters.onebot.v11.exception import ActionFailed
 
-from .auxiliaries import sendMsg, getImagesUrl, stuffDownload, getForwardNodes, sendNodes
-from .session import BotSession
+from .auxiliaries import (
+    get_forward_nodes,
+    get_images_url,
+    send_msg,
+    send_nodes,
+    stuff_download,
+)
 from .command import *
-from .config import getConfig
-config = getConfig()
+from .config import config
+from .session import BotSession
+
 
 shitlock = asyncio.Lock()
 
 
-def getSubClses(cls: type):
+def get_sub_clses(cls: type):
     registry = []
     for subclass in cls.__subclasses__():
         registry.append(subclass)
     return registry
 
-command_classes = getSubClses(BotCommand) + [BotCommand]
 
-async def cmdHandler(bot: Bot, matcher: type[Matcher], event: MessageEvent, cmd_cls: type, args: Message, *, only: str | None = None, _pid : int | None = None):
-    if cmd_cls not in command_classes: return
+command_classes = get_sub_clses(BotCommand) + [BotCommand]
+
+
+async def cmd_andler(
+    bot: Bot,
+    matcher: type[Matcher],
+    event: MessageEvent,
+    cmd_cls: type,
+    args: Message,
+    *,
+    only: str | None = None,
+    _pid: int | None = None,
+):
+    if cmd_cls not in command_classes:
+        return
 
     if only is not None and only != event.message_type:
         tip = f"该功能只能在 {only} 下使用"
-        if only == "private": tip = f"该功能只能在私聊中使用"
-        if only == "group": tip = f"该功能只能在群聊中使用"
+        if only == "private":
+            tip = "该功能只能在私聊中使用"
+        if only == "group":
+            tip = "该功能只能在群聊中使用"
         await matcher.finish(tip)
 
-    group_id = str(getattr(event, 'group_id', "private"))
-    if event.message_type == "private": group_id = "private"
+    group_id = str(getattr(event, "group_id", "private"))
+    if event.message_type == "private":
+        group_id = "private"
     user_id = str(event.user_id)
-    cmdname = cmd_cls.getName()
+    cmdname = cmd_cls.get_name()
 
     session = BotSession.make(group_id, user_id)
     command = cmd_cls.make(bot, session, _pid=_pid)
 
-    if _pid is None: _pid = session.curpid
+    if _pid is None:
+        _pid = session.curpid
     scmd = session.commands.get(_pid)
 
     if not scmd:
@@ -50,23 +73,35 @@ async def cmdHandler(bot: Bot, matcher: type[Matcher], event: MessageEvent, cmd_
         await matcher.finish(tip)
 
     if not command and scmd.name != cmdname:
-        tip =  "错误：会话被占用\n"
+        tip = "错误：会话被占用\n"
         tip += f"命令 {scmd.name} 正在运行，进行下一步前请先终止它或等待其完成。"
         await matcher.finish(tip)
 
     await scmd.run(args)
     await matcher.finish()
 
-def cmdRegister(name: str, cmd_cls: type, *, only: str | None = None, priority: int = 2, block: bool = True, _pid : int | None = None):
+
+def cmd_register(
+    name: str,
+    cmd_cls: type,
+    *,
+    only: str | None = None,
+    priority: int = 2,
+    block: bool = True,
+    _pid: int | None = None,
+):
     matcher = on_command(name, priority=priority, block=block)
 
     @matcher.handle()
     async def _handler(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
-        await cmdHandler(bot, matcher, event, cmd_cls, args, only=only, _pid=_pid)
+        await cmd_andler(bot, matcher, event, cmd_cls, args, only=only, _pid=_pid)
 
     return matcher
 
+
 driver = get_driver()
+
+
 @driver.on_shutdown
 async def shutdown():
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -76,51 +111,58 @@ async def shutdown():
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
-
 # ===Commands handlers=== #
-cmd_session = cmdRegister("session", BotCommandSession, priority=1, _pid=0)
+cmd_session = cmd_register("session", BotCommandSession, priority=1, _pid=0)
 
-cmd_help = cmdRegister("help", BotCommandHelp)
+cmd_help = cmd_register("help", BotCommandHelp)
 
-cmd_randpic = cmdRegister("randpic", BotCommandRandpic)
+cmd_randpic = cmd_register("randpic", BotCommandRandpic)
 
-cmd_advrandpic = cmdRegister("advrandpic", BotCommandAdvrandpic)
+cmd_advrandpic = cmd_register("advrandpic", BotCommandAdvrandpic)
 
-cmd_convert = cmdRegister("convert", BotCommandConvert, only="private")
+cmd_convert = cmd_register("convert", BotCommandConvert, only="private")
 
-cmd_shitpost = cmdRegister("shitpost", BotCommandShitpost, only="private")
+cmd_shitpost = cmd_register("shitpost", BotCommandShitpost, only="private")
 
-cmd_md2pic = cmdRegister("md2pic", BotCommandMd2pic)
+cmd_md2pic = cmd_register("md2pic", BotCommandMd2pic)
 
-cmd_otherwise = cmdRegister("", BotCommand, priority=3)
+cmd_otherwise = cmd_register("", BotCommand, priority=3)
 
 # ===Messages handlers=== #
 
 
 msg_convert = on_message(priority=10, block=False)
+
+
 @msg_convert.handle()
-async def handleMsgConvert(bot: Bot, event: MessageEvent):
-    if event.message_type != "private": return
+async def handle_msg_convert(bot: Bot, event: MessageEvent):
+    if event.message_type != "private":
+        return
     user_id = str(event.user_id)
-    session = BotSession.getObj("private", user_id)
-    if not session: return
-    if (command := session.commands.get(session.curpid)) is None: return
-    if not isinstance(command, BotCommandConvert): return
-    if not command.if_accept_pic: return
+    session = BotSession.get_obj("private", user_id)
+    if not session:
+        return
+    if (command := session.commands.get(session.curpid)) is None:
+        return
+    if not isinstance(command, BotCommandConvert):
+        return
+    if not command.if_accept_pic:
+        return
     lock = command.download_lock
     pid = command.pid
-    if lock is None: return
+    if lock is None:
+        return
 
     async with lock:
         temp_images_dir = config.bot_base / "private" / user_id / str(pid) / "temp"
         temp_images_dir.mkdir(parents=True, exist_ok=True)
         async with httpx.AsyncClient() as client:
-            url_list = await getImagesUrl(bot, event.reply, event.get_message(), 5)
+            url_list = await get_images_url(bot, event.reply, event.get_message(), 5)
             for url in url_list:
                 safe_name = f"{uuid.uuid4().hex}"
                 save_path = temp_images_dir / safe_name
                 try:
-                    await stuffDownload(client, url, save_path)
+                    await stuff_download(client, url, save_path)
                     await command.temp_images.put(str(save_path))
                     logger.info(f"下载图片成功: {save_path}")
                 except Exception as e:
@@ -129,35 +171,46 @@ async def handleMsgConvert(bot: Bot, event: MessageEvent):
 
 
 msg_shitpost = on_message(priority=10, block=False)
+
+
 @msg_shitpost.handle()
-async def handleMsgShitpost(bot: Bot, event: MessageEvent):
-    if event.message_type != "private": return
+async def handle_msg_shitpost(bot: Bot, event: MessageEvent):
+    if event.message_type != "private":
+        return
     user_id = str(event.user_id)
-    session = BotSession.getObj("private", user_id)
-    if not session: return
+    session = BotSession.get_obj("private", user_id)
+    if not session:
+        return
     command = session.commands.get(session.curpid)
-    if not command: return
-    if not isinstance(command, BotCommandShitpost): return
-    if not command.is_forwardable: return
+    if not command:
+        return
+    if not isinstance(command, BotCommandShitpost):
+        return
+    if not command.is_forwardable:
+        return
     groups = command.groups
     msg = event.get_message()
-
 
     async def _send(group: int, msg: Message, maxtry: int):
         for i in range(maxtry):
             try:
-                if not msg: return
+                if not msg:
+                    return
                 if msg[0].type == "forward":
                     msg_id = msg[0].data.get("id")
-                    if msg_id is None: return
+                    if msg_id is None:
+                        return
                     forward_data = await bot.get_forward_msg(id=msg_id)
-                    forward_msgs = forward_data.get('messages', [])
-                    nodes = getForwardNodes(forward_msgs, config.max_message_depth, summary="喵~")
-                    await sendNodes(bot, str(group), "", nodes)
+                    forward_msgs = forward_data.get("messages", [])
+                    nodes = get_forward_nodes(
+                        forward_msgs, config.max_message_depth, summary="喵~"
+                    )
+                    await send_nodes(bot, str(group), "", nodes)
                     return
                 for seg in msg:
                     seg.data["summary"] = "喵~"
-                    if not seg.data.get("sub_type", 0) == 0: seg.data["sub_type"] = 1
+                    if seg.data.get("sub_type", 0) != 0:
+                        seg.data["sub_type"] = 1
                 msg[-1].data["summary"] = "喵~"
                 await bot.send_group_msg(group_id=group, message=msg)
                 return
@@ -176,21 +229,34 @@ async def handleMsgShitpost(bot: Bot, event: MessageEvent):
 
 # Simple auto reply, just for fun :). May be reconstructed in future.
 msg_autoreply = on_message(priority=10, block=False)
+
+
 @msg_autoreply.handle()
-async def handleMsgAutoreply(bot: Bot, event: MessageEvent):
-    group_id = getattr(event, 'group_id', "private")
-    if event.message_type == "private": group_id = "private"
+async def handle_msg_autoreply(bot: Bot, event: MessageEvent):
+    group_id = getattr(event, "group_id", "private")
+    if event.message_type == "private":
+        group_id = "private"
     user_id = str(event.user_id)
 
     for seg in event.get_message():
-        if seg.type != "text": continue
-        text = seg.data.get('text', "")
-        if text.replace("!", "").replace(" ", "").replace("！", "").replace("w", "").replace("我", "") in ["csn", "草死你", "操死你", "🌿死你", "艹死你", "zjsncsn"]:
-            msg = Message(MessageSegment.image(f"file://{config.client_base / "wcsn.jpg"}"))
+        if seg.type != "text":
+            continue
+        text = seg.data.get("text", "")
+        cleaned_text = (
+            text.replace("!", "")
+            .replace(" ", "")
+            .replace("！", "")
+            .replace("w", "")
+            .replace("我", "")
+        )
+        if cleaned_text in ["csn", "草死你", "操死你", "🌿死你", "艹死你", "zjsncsn"]:
+            wcsn_path = config.client_base / "wcsn.jpg"
+            msg = Message(MessageSegment.image(f"file://{wcsn_path}"))
             msg[0].data["sub_type"] = 1
             msg[0].data["summary"] = "喵呜~"
-            await sendMsg(bot, group_id, user_id, msg)
+            await send_msg(bot, group_id, user_id, msg)
             return
-        if text.replace("?", "").replace(" ", "").replace("？", "") in ["这是你吗", "zsnm", "是你吗"]:
-            await sendMsg(bot, group_id, user_id, "是我。")
+        cleaned = text.replace("?", "").replace(" ", "").replace("？", "")
+        if cleaned in ["这是你吗", "zsnm", "是你吗"]:
+            await send_msg(bot, group_id, user_id, "是我。")
             return
