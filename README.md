@@ -16,25 +16,25 @@
 
 ## TODO List（大致按优先级排序 但随缘想先解决哪个就解决哪个）
 
-- 处理代码命名规范还有加注释 完善配置文件以及目录结构 按照nonebot所说的插件规范修改（？）
-
-- 权限管理系统
-
-- 自动回复管理系统
-
-- 实现 /stop 用于终止当前会话
-
 - 完全流水线化图片转视频功能 目前只流水化了图片转png 之后要实现：获取url-下载-转png-转视频-发送 的流水线 会为中间的流程单独抽象出来一个生产消费异步函数（因为中间的流程本质上都是 作为消费者从前buffer获取元素 作为生产者向后buffer提供元素） 两边的应该不用抽象
 
 - 给 /convert 添加别的方式来绕过河蟹（比如给图片加边框）
+
+- 权限管理系统
 
 - B站视频解析并下载（支持链接块或者BV号）
 
 - 给定pid下载p站图片
 
+- 将信息监听功能像命令一样给OOP化 然后实现自动回复管理系统
+
+- 实现 /stop 用于终止当前会话
+
 - 给 /shitpost 添加缓释参数 并为其添加缓存区以防止url过期
 
 - 添加单元测试
+
+- 为代码添加更多注释 并按照nonebot所说的插件规范修改代码（？）
 
 - 给史搭一个数据库存起来管理 智能化/shitpost
   - 提一嘴我打算怎么搭建数据库吧 将史的message键保存为json 如果是forward类型的则将其转换为node列表后打包为{"type": forward, "data": {"content": [node]}} 将json中提及的富媒体信息全部瞎子后重命名为其0xsha256sum值保存 并将json富媒体信息的url替换为对应的本地路径 最后将json重命名为其0xsha256sum值 这样无论是富媒体还是代表史的json文件都可以通过计算哈希值与已有的文件名比对来去重
@@ -45,14 +45,16 @@
   - 根据以上信息我瞎编了一个可能有用的发史优先级公式：
 
     $$
-    50 - \frac{100}{\pi}\arctan\left(c_1时间戳 - f(好评数) + c_2 e^{c_3发送失败次数} + \infty\mathbb1_{已经发送过该史的群号}(将要发送史的群号) + \text{ramdom}(0, 最新的史的时间戳与最旧的史的时间戳之差)\right)
+    \begin{aligned}
+    \small{50 - \frac{100}{\pi}\arctan\left(c_1时间戳 - f(好评数) + c_2 e^{c_3发送失败次数} + \infty\mathbb1_{已经发送过该史的群号}(将要发送史的群号) + \text{ramdom}(0, 最新的史的时间戳与最旧的史的时间戳之差)\right)}
+    \end{aligned}
     $$
 
 - 暂时想到这些 哪天我又有什么点子也说不定
 
 ## 鸣谢
 
-- [ManyACG](https://manyacg.top): 为 /randpic 提供了API
+- [ManyACG](https://manyacg.top): 为 /randpic ~~*以及下面的彩蛋*~~ 提供了API
 - [Lolicon APP](https://lolicon.app): 为 /advrandpic 提供了API
 - [github-markdown-css](https://github.com/sindresorhus/github-markdown-css): 为markdown渲染提供了CSS主题
 

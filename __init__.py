@@ -1,2 +1,2 @@
 from . import command, handlers, session  # noqa: F401
-from .config import config
+from .config import config  # noqa: F401

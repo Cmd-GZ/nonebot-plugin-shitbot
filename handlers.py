@@ -9,17 +9,16 @@ from nonebot.log import logger
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
-from .auxiliaries import (
+from .auxs import (
     get_forward_nodes,
     get_images_url,
     send_msg,
     send_nodes,
     stuff_download,
 )
-from .command import *
+from .commands import *
 from .config import config
 from .session import BotSession
-
 
 shitlock = asyncio.Lock()
 

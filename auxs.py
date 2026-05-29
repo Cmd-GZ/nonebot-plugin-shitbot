@@ -1,107 +1,13 @@
-import io
 import shutil
 from pathlib import Path
 from typing import Any
-from PIL import Image
 
 import httpx
-from nonebot import require
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.adapters.onebot.v11.event import Reply
 from nonebot.log import logger
 
-require("nonebot_plugin_htmlrender")
-from nonebot_plugin_htmlrender import md_to_pic  # noqa: E402
-
-from .config import config  # noqa: E402
-
-
-async def md_to_pic_auto_size(
-    md_text: str,
-    *,
-    css_path: str = "",
-    min_w: int = 20,
-    max_w: int = 2000,
-    min_h: int = 20,
-    max_h: int | None = None,
-    side_padding: int = 30,
-    device_scale_factor=2,
-) -> bytes:
-
-    raw = await md_to_pic(
-        md_text, width=max_w, css_path=css_path, device_scale_factor=device_scale_factor
-    )
-    img = Image.open(io.BytesIO(raw))
-    min_w = int(device_scale_factor * min_w)
-    min_h = int(device_scale_factor * min_h)
-    max_h = int(device_scale_factor * max_h) if max_h is not None else max_h
-    side_padding = int(device_scale_factor * side_padding)
-
-    # Get the background color (the upper-left color)
-    bgpx: Any = img.getpixel((0, 0))
-    bgr, bgg, bgb = int(bgpx[0]), int(bgpx[1]), int(bgpx[2])
-
-    def is_bg(r: int, g: int, b: int) -> bool:
-        return abs(r - bgr) < 6 and abs(g - bgg) < 6 and abs(b - bgb) < 6
-
-    def is_colunm_has_content(x: int):
-        for y in range(0, h, 4):
-            pixel: Any = img.getpixel((x, y))
-            r, g, b = int(pixel[0]), int(pixel[1]), int(pixel[2])
-            if not is_bg(r, g, b):
-                return True
-        return False
-
-    def is_row_has_content(y: int):
-        for x in range(0, w, 4):
-            pixel: Any = img.getpixel((x, y))
-            r, g, b = int(pixel[0]), int(pixel[1]), int(pixel[2])
-            if not is_bg(r, g, b):
-                return True
-        return False
-
-    w, h = img.size
-    content_left, content_right = 0, w
-    content_top, content_bottom = 0, h
-
-    # Find out the leftest column that has content
-    for x in range(w):
-        if is_colunm_has_content(x):
-            content_left = x
-            break
-
-    # Find out the rightest column that has content
-    for x in range(w - 1, content_left - 1, -1):
-        if is_colunm_has_content(x):
-            content_right = x + 1
-            break
-
-    # Find out the topest row that has content
-    for y in range(h):
-        if is_row_has_content(y):
-            content_top = y
-            break
-
-    # Find out the bottomest row that has content
-    for y in range(h - 1, content_top - 1, -1):
-        if is_row_has_content(y):
-            content_bottom = y + 1
-            break
-
-    crop_left = max(0, content_left - side_padding)
-    crop_right = max(crop_left + min_w + 1, content_right + side_padding)
-    crop_top = max(0, content_top - side_padding)
-    crop_bottom = max(crop_top + min_h + 1, content_bottom + side_padding)
-    if max_h is not None:
-        crop_bottom = min(crop_bottom, crop_top + max_h)
-
-    crop_right = min(crop_right, w)
-    crop_bottom = min(crop_bottom, h)
-    img = img.crop((crop_left, crop_top, crop_right, crop_bottom))
-
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
+from .config import config
 
 
 async def rm_path(path: Path):
@@ -224,7 +130,9 @@ def get_forward_nodes(
     return nodes
 
 
-async def send_nodes(bot: Bot, group_id: str, user_id: str, nodes: list[dict[str, Any]]):
+async def send_nodes(
+    bot: Bot, group_id: str, user_id: str, nodes: list[dict[str, Any]]
+):
     if group_id == "private":
         try:
             return await bot.call_api(

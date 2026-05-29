@@ -99,7 +99,7 @@ class BotArgParser:
             if argv[i] in subparsers:
                 subcmd = argv[i]
                 ownargv = argv[:i]
-                subargv = argv[i + 1:]
+                subargv = argv[i + 1 :]
                 break
 
         options = self._opts_rule.keys()

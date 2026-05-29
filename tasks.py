@@ -13,11 +13,11 @@ from nonebot.adapters.onebot.v11 import (
 )
 from nonebot.log import logger
 
-from .auxiliaries import rm_path
+from .auxs import rm_path
 from .config import config
 
 if TYPE_CHECKING:
-    from .command import BotCommandConvert
+    from .commands.convert_cmd import BotCommandConvert
 
 bash = shutil.which("bash") or "/bin/bash"
 
