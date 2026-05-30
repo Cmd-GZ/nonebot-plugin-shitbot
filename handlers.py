@@ -1,8 +1,6 @@
 import asyncio
 import random
-import uuid
 
-import httpx
 from nonebot import get_driver, on_command, on_message
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
@@ -14,7 +12,6 @@ from .auxs import (
     get_images_url,
     rm_path,
     send_msg,
-    stuff_download,
 )
 from .commands import *
 from .config import config
@@ -152,28 +149,19 @@ async def handle_msg_convert(bot: Bot, event: MessageEvent):
         return
     if not isinstance(command, BotCommandConvert):
         return
-    if not command.if_accept_pic:
-        return
-    lock = command.download_lock
-    pid = command.pid
+    lock = command.prod_lock
+    urls = command.urls
     if lock is None:
         return
 
     async with lock:
-        temp_images_dir = config.cache / "private" / user_id / str(pid) / "temp"
-        temp_images_dir.mkdir(parents=True, exist_ok=True)
-        async with httpx.AsyncClient() as client:
-            url_list = await get_images_url(bot, event.reply, event.get_message(), 5)
-            for url in url_list:
-                safe_name = f"{uuid.uuid4().hex}"
-                save_path = temp_images_dir / safe_name
-                try:
-                    await stuff_download(client, url, save_path)
-                    await command.temp_images.put(str(save_path))
-                    logger.info(f"下载图片成功: {save_path}")
-                except Exception as e:
-                    logger.error(f"下载图片失败 {url}: {e}")
-            command.p2png_event.set()
+        if not command.if_accept_pic:
+            return
+        url_list = await get_images_url(
+            bot, event.reply, event.get_message(), config.max_message_depth
+        )
+        for url in url_list:
+            await urls.put(url)
 
 
 msg_shitpost = on_message(priority=10, block=False)

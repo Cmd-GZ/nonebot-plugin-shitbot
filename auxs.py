@@ -42,7 +42,7 @@ async def send_msg(
     message_type = "group" if group_id is not None else "private"
 
     try:
-        if isinstance(msg, list):
+        if isinstance(msg, list) and not isinstance(msg, Message):
             return await bot.send_forward_msg(
                 message_type=message_type,
                 user_id=user_id,
@@ -149,7 +149,7 @@ def get_forward_nodes(
 
 async def get_images_url(
     bot: Bot, event_reply: Reply | None, event_msg: Message, depth: int
-):
+) -> list[str]:
     rax = []
 
     reply_segs = []

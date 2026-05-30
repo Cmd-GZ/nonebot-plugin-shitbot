@@ -1,19 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from nonebot.adapters.onebot.v11 import Bot, Message
+import httpx
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
 
-from ..auxs import rm_cache, rm_path
+from ..auxs import rm_cache, stuff_download
 from ..command import BotCommand
 from ..config import config
 from ..parser import BotArgParser
-from ..tasks import convert_p_to_png, convert_png_to_v, convert_send_videos
+from ..tasks import EndOfQueue, prod_cons
 
 if TYPE_CHECKING:
     from ..session import BotSession
+
+bash = shutil.which("bash") or "/bin/bash"
 
 
 class BotCommandConvert(BotCommand):
@@ -22,42 +28,29 @@ class BotCommandConvert(BotCommand):
     def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         super().__init__(bot, session, _pid=_pid, _internal=_internal)
         self._runlock = asyncio.Lock()
-        self._event = asyncio.Event()
-        self._p2png_event = asyncio.Event()
         self._if_accept_pic = False
-        self._temp_images: asyncio.Queue[str] = asyncio.Queue()
-        self._images: list[str] = []
-        self._videos: list[str] = []
-        self._download_lock: asyncio.Lock = asyncio.Lock()
-        self._copy_lock: asyncio.Lock = asyncio.Lock()
-
-    @property
-    def p2png_event(self):
-        return self._p2png_event
+        self._prod_lock = asyncio.Lock()
+        self._convert_lock = asyncio.Lock()
+        self._urls: asyncio.Queue[str | EndOfQueue] = asyncio.Queue()
+        self._downloads: asyncio.Queue[str | EndOfQueue] = asyncio.Queue()
+        self._pngs: asyncio.Queue[str | EndOfQueue] = asyncio.Queue()
+        self._videos: asyncio.Queue[str | EndOfQueue] = asyncio.Queue()
 
     @property
     def if_accept_pic(self):
         return self._if_accept_pic
 
     @property
-    def temp_images(self):
-        return self._temp_images
-
-    @property
-    def images(self):
-        return self._images
-
-    @property
     def videos(self):
         return self._videos
 
     @property
-    def download_lock(self):
-        return self._download_lock
+    def prod_lock(self):
+        return self._prod_lock
 
     @property
-    def copy_lock(self):
-        return self._copy_lock
+    def urls(self):
+        return self._urls
 
     def _init_parser(self):
         parser = BotArgParser()
@@ -68,37 +61,146 @@ class BotCommandConvert(BotCommand):
         parser.set_rule(max=0, need_subcmd=True)
         return parser
 
+    @staticmethod
+    async def _url_to_download(
+        download_url: str, client: httpx.AsyncClient, download_dir: Path
+    ):
+        try:
+            filename = f"{uuid.uuid4().hex}"
+            save_path = download_dir / filename
+            await stuff_download(client, download_url, save_path)
+            logger.info(f"下载图片成功: {save_path}")
+            return str(save_path)
+        except Exception as e:
+            logger.error(f"下载图片失败 {download_url}: {e}")
+            return ""
+
+    @staticmethod
+    async def _download_to_png(download_path: str, png_dir: Path):
+        if download_path == "":
+            return ""
+        png_path = png_dir / f"{uuid.uuid4().hex}.png"
+        logger.info(
+            f"执行图片转png脚本: {config.script_p2png_path} {download_path} {png_path}"
+        )
+        proc = await asyncio.create_subprocess_exec(
+            bash,
+            str(config.script_p2png_path),
+            str(download_path),
+            str(png_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if stdout:
+            logger.info(f"脚本 stdout:\n{stdout.decode()}")
+        if stderr:
+            logger.warning(f"脚本 stderr:\n{stderr.decode()}")
+        if proc.returncode != 0:
+            logger.error(f"转换失败: {stderr.decode()[:]}")
+            return ""
+        logger.info(f"转换图片成功: {png_path}")
+        return str(png_path)
+
+    @staticmethod
+    async def _png_to_video(png_path: str, video_dir: Path):
+        if png_path == "":
+            return ""
+        video_path = video_dir / f"{uuid.uuid4().hex}.mp4"
+        logger.info(
+            f"执行图片转视频脚本: {config.script_png2v_path} {png_path} {video_path}"
+        )
+        proc = await asyncio.create_subprocess_exec(
+            bash,
+            str(config.script_png2v_path),
+            str(png_path),
+            str(video_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if stdout:
+            logger.info(f"脚本 stdout:\n{stdout.decode()}")
+        if stderr:
+            logger.warning(f"脚本 stderr:\n{stderr.decode()}")
+        if proc.returncode != 0:
+            logger.error(f"转换失败: {stderr.decode()[:]}")
+            return ""
+        logger.info(f"转换视频成功: {video_path}")
+        return str(video_path)
+
+    async def _send_videos(self):
+        if not self.session:
+            return
+        videos = []
+        while True:
+            video = await self._videos.get()
+            if isinstance(video, EndOfQueue):
+                break
+            if video == "":
+                continue
+            videos.append(video)
+
+        logger.info(f"用户 {self.session.user_id} 结束收集，共收到 {len(videos)} 张")
+
+        if len(videos) == 0:
+            await self.send_msg("没有视频被生成。")
+            return
+
+        await self.send_msg(f"共生成 {len(videos)} 个视频，逐个发送…")
+
+        for i, video in enumerate(videos):
+            video_file = Path(video)
+            if not video_file.exists():
+                logger.error(f"视频文件不存在: {video_file}")
+                continue
+            container_path = config.client_base / video_file.relative_to(
+                config.bot_base
+            )
+            try:
+                await self.send_msg(
+                    Message(MessageSegment.video(f"file://{container_path}")),
+                )
+                logger.info(f"发送第 {i + 1} 个视频成功: {video_file.name}")
+            except Exception as e:
+                logger.error(f"发送 {video_file.name} 失败: {e}")
+                await self.send_msg(
+                    f"发送 {video_file.name} 失败: {e}\n尝试以文件形式发送..."
+                )
+                try:
+                    msg = Message(
+                        MessageSegment("file", {"file": f"file://{container_path}"})
+                    )
+                    await self.send_msg(msg)
+                    logger.info(
+                        f"以文件形式发送第 {i + 1} 个视频成功: {video_file.name}"
+                    )
+                except Exception as e:
+                    logger.error(f"发送 {video_file.name} 失败: {e}")
+                    await self.send_msg(
+                        f"发送第 {i + 1} 个视频 {video_file.name} 失败: {e}"
+                    )
+
+                await asyncio.sleep(0.25)
+
+        await self.send_msg("视频发送完毕。")
+
     async def _convert_start(self):
         if not self.session:
             return
-        logger.info(f"用户 {self.session.user_id} 开始了图片收集")
-        await self.send_msg(
-            "图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。"
-        )
-        self._if_accept_pic = True
-        asyncio.create_task(convert_p_to_png(self))
-        return
-
-    async def _convert_stop(self):
-        if not self.session:
-            return
-        self._if_accept_pic = False
-        user_id = self.session.user_id
-
-        await self.send_msg("保存图片中...")
-        async with self.download_lock:
-            pass
-        self.p2png_event.set()
-        async with self.copy_lock:
-            pass
-        await self.send_msg("保存完毕。")
-
-        images_dir = (
+        downloads_dir = (
             config.cache
             / self.session.group_id
             / self.session.user_id
             / str(self._pid)
-            / "images"
+            / "downloads"
+        )
+        pngs_dir = (
+            config.cache
+            / self.session.group_id
+            / self.session.user_id
+            / str(self._pid)
+            / "pngs"
         )
         videos_dir = (
             config.cache
@@ -107,35 +209,69 @@ class BotCommandConvert(BotCommand):
             / str(self._pid)
             / "videos"
         )
-        await rm_path(videos_dir)
+
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+        pngs_dir.mkdir(parents=True, exist_ok=True)
         videos_dir.mkdir(parents=True, exist_ok=True)
 
-        if len(self.images) == 0:
-            await rm_cache(self.session.group_id, self.session.user_id, str(self._pid))
-            await self.send_msg("没有有效的图片被保存。")
-            self.unlock()
-            return
+        async def _urls_to_downloads():
+            try:
+                async with httpx.AsyncClient() as client:
+                    await prod_cons(
+                        self._urls,
+                        self._downloads,
+                        self._url_to_download,
+                        client,
+                        downloads_dir,
+                    )
+            except Exception as e:
+                logger.exception(f"urls_to_downloads 管道异常退出: {e}")
 
-        logger.info(
-            f"用户 {self.session.user_id} 结束收集，共收到 {len(self.images)} 张"
+        async def _downloads_to_pngs():
+            try:
+                await prod_cons(
+                    self._downloads, self._pngs, self._download_to_png, pngs_dir
+                )
+            except Exception as e:
+                logger.exception(f"downloads_to_pngs 管道异常退出: {e}")
+
+        async def _pngs_to_videos():
+            try:
+                async with self._convert_lock:
+                    await prod_cons(
+                        self._pngs, self._videos, self._png_to_video, videos_dir
+                    )
+            except Exception as e:
+                logger.exception(f"pngs_to_videos 管道异常退出: {e}")
+
+        asyncio.create_task(_urls_to_downloads())
+        asyncio.create_task(_downloads_to_pngs())
+        asyncio.create_task(_pngs_to_videos())
+
+        logger.info(f"用户 {self.session.user_id} 开始了图片收集")
+        await self.send_msg(
+            "图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。"
         )
 
-        await self.send_msg(f"有效保存 {len(self.images)} 张图片，开始处理…")
+        self._if_accept_pic = True
+        return
 
-        async def _run_task():
-            try:
-                await convert_png_to_v(self)
-                await convert_send_videos(self)
-            except Exception:
-                pass
-            finally:
-                if self.session:
-                    await rm_cache(
-                        self.session.group_id, self.session.user_id, str(self._pid)
-                    )
-                self.unlock()
+    async def _convert_stop(self):
+        if not self.session:
+            return
+        self._if_accept_pic = False
 
-        asyncio.create_task(_run_task())
+        await self.send_msg("转换图片中...")
+        async with self._prod_lock:
+            await self._urls.put(EndOfQueue())
+
+        async with self._convert_lock:
+            pass
+        await self.send_msg("转换完毕。")
+
+        await self._send_videos()
+        await rm_cache(self.session.group_id, self.session.user_id, str(self._pid))
+        self.unlock()
         return
 
     async def run(self, args: Message):
