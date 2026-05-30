@@ -49,7 +49,7 @@ class BotCommandHelp(BotCommand):
             可用命令：
             /session    管理当前会话
             /help        显示帮助信息
-            /convert     收集图片并批量转换为视频（仅私聊）
+            /convert     收集图片并批量处理后发送（仅私聊）
             /randpic     随机获取二次元图片
             /advrandpic  随机获取二次元图片，支持指定标签
             /shitpost    将消息转发到多个群聊（仅私聊）
@@ -78,22 +78,26 @@ class BotCommandHelp(BotCommand):
         if subcmd == "convert":
             tip = textwrap.dedent("""\
                 ```bash
-                /convert: 收集图片并批量转换为视频
+                /convert: 收集图片并批量处理后发送
 
                 使用方式：
-                /convert start  开始收集图片
-                                之后你发送的所有图片都会被 Bot 保存
+                    /convert start [选项]   开始收集图片
+                                            之后你发送的所有图片都会被 Bot 保存
+                    /convert stop   停止收集，将图片转为特定形式并发送
 
-                /convert stop   停止收集，将图片转为视频并发送
+                选项：
+                    -m <模式>       转换模式，默认为 video
+                        video: 将图片转换为视频发送
+                        frame: 为图片添加边框后发送
 
                 示例：
-                /convert start
-                (发送图片...)
-                /convert stop
+                    /convert start
+                    (发送图片...)
+                    /convert stop
 
-                注意: 
+                注意:
                     此命令仅限私聊使用
-                    发送视频时, 若视频发送失败, 则 Bot 会尝试以文件的形式发送
+                    发送视频时, 若视频发送失败, Bot 会尝试以文件的形式发送
                 ```
             """)
 
@@ -106,7 +110,7 @@ class BotCommandHelp(BotCommand):
                 /randpic [选项]
 
                 选项：
-                -n <数字>   设置发送图片数量，范围 1~10，默认为 1
+                -n <数字>   设置发送图片数量，范围 1~10, 默认为 1
                 -r <模式>   内容模式，默认为 off
                     off: 启用内容过滤
                     on:  关闭内容过滤 [仅私聊可用]

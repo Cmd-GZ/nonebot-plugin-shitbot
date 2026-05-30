@@ -14,6 +14,7 @@ class ShitBotConfig(BaseModel):
     client_base: Path
     script_png2v_path: Path
     script_p2png_path: Path
+    script_png2fr_path: Path
     temp_dir: Path
     whitelist_groups_setu: list[str]
     whitelist_users_setu: list[str]
