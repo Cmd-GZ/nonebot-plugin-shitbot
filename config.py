@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict
 
 class ShitBotConfig(BaseModel):
     bot_base: Path
+    config: Path
+    cache: Path
+    data: Path
     client_base: Path
     script_png2v_path: Path
     script_p2png_path: Path

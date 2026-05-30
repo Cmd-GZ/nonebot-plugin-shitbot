@@ -19,15 +19,10 @@ async def rm_path(path: Path):
         path.unlink()
 
 
-async def convert_cleanup(group_id: str, user_id: str, pid: str):
-    images_dir = config.bot_base / group_id / user_id / pid / "images"
-    videos_dir = config.bot_base / group_id / user_id / pid / "videos"
-    tar_path = config.bot_base / group_id / user_id / pid / f"{user_id}.tar"
-    temp_dir = config.bot_base / group_id / user_id / pid / "temp"
-
-    for path in [images_dir, videos_dir, tar_path, temp_dir]:
-        await rm_path(path)
-        logger.info(f"已删除: {path}")
+async def rm_cache(group_id: str, user_id: str, pid: str):
+    cache_path = config.cache / group_id / user_id / pid
+    await rm_path(cache_path)
+    logger.info(f"已删除缓存: {cache_path}")
 
 
 async def send_msg(bot: Bot, group_id: str, user_id: str, msg: str | Message):

@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-import tarfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nonebot.adapters.onebot.v11 import (
-    Bot,
     Message,
     MessageSegment,
 )
@@ -22,21 +20,21 @@ if TYPE_CHECKING:
 bash = shutil.which("bash") or "/bin/bash"
 
 
-async def convert_png_to_v(
-    bot: Bot, user_id: str, pid: str, img_dir: Path, video_dir: Path
-):
-    try:
-        user_id_int = int(user_id)
-    except ValueError:
-        logger.error(f"无效的 user_id: {user_id}")
-        return
-    try:
-        logger.info(f"执行转换脚本: {config.script_png2v_path} {img_dir} {video_dir}")
+async def convert_png_to_v(command: BotCommandConvert):
+    images = command.images
+    videos = command.videos
+    for image in images:
+        if not Path(image).exists():
+            logger.warning(f"图片文件不存在，跳过: {image}")
+            continue
+        video = str(Path(image).with_suffix(".mp4"))
+
+        logger.info(f"执行转换脚本: {config.script_png2v_path} {image} {video}")
         proc = await asyncio.create_subprocess_exec(
             bash,
             str(config.script_png2v_path),
-            str(img_dir),
-            str(video_dir),
+            str(image),
+            str(video),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -47,67 +45,52 @@ async def convert_png_to_v(
             logger.warning(f"脚本 stderr:\n{stderr.decode()}")
 
         if proc.returncode != 0:
-            await bot.send_private_msg(
-                user_id=user_id_int, message=f"转换失败: {stderr.decode()[:]}"
+            await command.send_msg(f"转换失败: {stderr.decode()[:]}")
+            continue
+
+        if not Path(video).exists():
+            await command.send_msg(f"未生成视频文件: {video}")
+            continue
+
+        videos.append(video)
+        logger.info(f"转换成功: {video}")
+
+
+async def convert_send_videos(command: BotCommandConvert):
+
+    await command.send_msg(f"共生成 {len(command.videos)} 个视频，逐个发送…")
+
+    for video in command.videos:
+        video_file = Path(video)
+        if not video_file.exists():
+            continue
+        container_path = config.client_base / video_file.relative_to(config.bot_base)
+        try:
+            await command.send_msg(
+                Message(MessageSegment.video(f"file://{container_path}")),
             )
-            return
-        if not video_dir.exists() or not any(video_dir.iterdir()):
-            await bot.send_private_msg(user_id=user_id_int, message="未生成视频文件。")
-            return
-
-        videos = sorted(
-            [f for f in video_dir.iterdir() if f.is_file() and f.suffix == ".mp4"]
-        )
-        if not videos:
-            await bot.send_private_msg(
-                user_id=user_id_int, message="未找到 mp4 视频文件。"
+            logger.info(f"发送视频成功: {video_file.name}")
+        except Exception as e:
+            logger.error(f"发送 {video_file.name} 失败: {e}")
+            await command.send_msg(
+                f"发送 {video_file.name} 失败: {e}\n尝试以文件形式发送..."
             )
-            return
-
-        await bot.send_private_msg(
-            user_id=user_id_int, message=f"共生成 {len(videos)} 个视频，逐个发送…"
-        )
-
-        for i, video_file in enumerate(videos, 1):
-            if not video_file.exists():
-                continue
-            size_mb = video_file.stat().st_size / (1024 * 1024)
-            if size_mb > 100:
-                await bot.send_private_msg(
-                    user_id=user_id_int, message=f"视频 {video_file.name} 过大，跳过"
-                )
-                continue
             try:
-                container_path = config.client_base / video_file.relative_to(
-                    config.bot_base
+                if command.session is None:
+                    raise Exception("未知错误：命令生命周期提前结束")
+                await command.bot.upload_private_file(
+                    user_id=int(command.session.user_id),
+                    file=str(video_file),
+                    name=video_file.name,
                 )
-                await bot.send_private_msg(
-                    user_id=user_id_int,
-                    message=Message(MessageSegment.video(f"file://{container_path}")),
-                )
-                logger.info(f"发送视频成功: {video_file.name}")
-                await asyncio.sleep(1)
+                logger.info(f"发送文件成功: {video_file.name}")
             except Exception as e:
                 logger.error(f"发送 {video_file.name} 失败: {e}")
-                await bot.send_private_msg(
-                    user_id=user_id_int, message=f"发送 {video_file.name} 失败: {e}"
-                )
+                await command.send_msg(f"发送 {video_file.name} 失败: {e}")
 
-        tar_path = config.bot_base / "private" / user_id / pid / f"{user_id}.tar"
-        with tarfile.open(tar_path, "w") as tar:
-            for video_file in videos:
-                tar.add(video_file, arcname=video_file.name)
+            await asyncio.sleep(0.25)
 
-        container_tar = config.client_base / tar_path.relative_to(config.bot_base)
-        logger.info(f"打包完成: {tar_path}")
-        await bot.upload_private_file(
-            user_id=user_id_int, file=f"file://{container_tar}", name="videos.tar"
-        )
-        await bot.send_private_msg(user_id=user_id_int, message="视频打包文件已发送。")
-
-    except Exception as e:
-        logger.error(f"处理异常: {e}")
-        await bot.send_private_msg(user_id=user_id_int, message="处理过程出错")
+    await command.send_msg("视频发送完毕。")
 
 
 async def convert_p_to_png(command: BotCommandConvert):
@@ -118,11 +101,7 @@ async def convert_p_to_png(command: BotCommandConvert):
     images = command.images
     user_id = int(command.session.user_id)
     output_dir = (
-        config.bot_base
-        / "private"
-        / command.session.user_id
-        / str(command.pid)
-        / "images"
+        config.cache / "private" / command.session.user_id / str(command.pid) / "images"
     )
     await rm_path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

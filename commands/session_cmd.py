@@ -43,7 +43,7 @@ class BotCommandSession(BotCommand):
                 return
             tip = "错误：会话被占用\n"
             tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-            await self._send_msg(tip)
+            await self.send_msg(tip)
             return
 
         self._argv = new_argv
@@ -59,14 +59,14 @@ class BotCommandSession(BotCommand):
             if pid <= 0:
                 tip = "错误：pid不合规\n"
                 tip += "pid应大于0。"
-                await self._send_msg(tip)
+                await self.send_msg(tip)
                 self.unlock()
                 return
 
             self.session.curpid = pid
-            await self._send_msg(f"已将前台pid设为 {pid}")
+            await self.send_msg(f"已将前台pid设为 {pid}")
             if len(self.session.commands.keys()) <= 1:
-                await self._send_msg(
+                await self.send_msg(
                     "警告：当前无其它命令正在运行，该设置会随着用户会话被释放而被重置。"
                 )
 
@@ -75,6 +75,6 @@ class BotCommandSession(BotCommand):
             cmd_info = {pid: cmd.name for pid, cmd in commands.items()}
             tip = f"前台pid: {self.session.curpid}\n\n"
             tip += f"正在运行的命令: \n{json.dumps(cmd_info, indent=2, ensure_ascii=False)}"
-            await self._send_msg(tip)
+            await self.send_msg(tip)
 
         self.unlock()

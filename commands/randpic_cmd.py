@@ -42,7 +42,7 @@ class BotCommandRandpic(BotCommand):
                 return
             tip = "错误：会话被占用\n"
             tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-            await self._send_msg(tip)
+            await self.send_msg(tip)
             return
 
         self._argv = new_argv
@@ -63,7 +63,7 @@ class BotCommandRandpic(BotCommand):
 
         if r18 == "on" and self.session.group_id != "private":
             tip = "该功能只能在私聊中使用"
-            await self._send_msg(tip)
+            await self.send_msg(tip)
             self.unlock()
             return
 
@@ -81,9 +81,9 @@ class BotCommandRandpic(BotCommand):
             try:
                 msg = Message(MessageSegment("image", {"url": api}))
                 msg[0].data["summary"] = "我的新自拍喵[图片]"
-                await self._send_msg(msg)
+                await self.send_msg(msg)
                 logger.info("发送图片成功")
             except Exception as e:
                 logger.error(f"发送图片失败: {e}")
-                await self._send_msg(f"图片发送失败：{e}")
+                await self.send_msg(f"图片发送失败：{e}")
         self.unlock()

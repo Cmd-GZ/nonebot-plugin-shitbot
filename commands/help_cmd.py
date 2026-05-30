@@ -84,14 +84,16 @@ class BotCommandHelp(BotCommand):
                 /convert start  开始收集图片
                                 之后你发送的所有图片都会被 Bot 保存
 
-                /convert stop   停止收集，将图片转为视频并打包发送
+                /convert stop   停止收集，将图片转为视频并发送
 
                 示例：
                 /convert start
                 (发送图片...)
                 /convert stop
 
-                注意：此命令仅限私聊使用
+                注意: 
+                    此命令仅限私聊使用
+                    发送视频时, 若视频发送失败, 则 Bot 会尝试以文件的形式发送
                 ```
             """)
 

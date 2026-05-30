@@ -53,7 +53,7 @@ class BotCommandAdvrandpic(BotCommand):
                 return
             tip = "错误：会话被占用\n"
             tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-            await self._send_msg(tip)
+            await self.send_msg(tip)
             return
 
         self._argv = new_argv
@@ -68,7 +68,7 @@ class BotCommandAdvrandpic(BotCommand):
         r18 = self._parser.opts_value["-r"][0]
         if r18 != "off" and self.session.group_id != "private":
             tip = "该功能只能在私聊中使用"
-            await self._send_msg(tip)
+            await self.send_msg(tip)
             self.unlock()
             return
         if r18 == "off":
@@ -118,7 +118,7 @@ class BotCommandAdvrandpic(BotCommand):
         data = response.json()
 
         if len(data["data"]) < self._num:
-            await self._send_msg(f"未找到指定数量的图片，仅找到 {len(data['data'])} 张")
+            await self.send_msg(f"未找到指定数量的图片，仅找到 {len(data['data'])} 张")
 
         for pic in data["data"]:
             pid = str(pic["pid"])
@@ -134,11 +134,11 @@ class BotCommandAdvrandpic(BotCommand):
                     ]
                 )
                 msg[0].data["summary"] = "我的新自拍喵[图片]"
-                await self._send_msg(msg)
+                await self.send_msg(msg)
                 logger.info("发送图片成功")
             except Exception as e:
                 logger.error(f"发送图片失败: {e}")
                 text += f"\n图片发送失败, 大概率被河蟹了, 请尝试私聊使用该命令\n{e}"
-                await self._send_msg(text)
+                await self.send_msg(text)
 
         self.unlock()

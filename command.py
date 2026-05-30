@@ -77,7 +77,7 @@ class BotCommand:
     async def _send_format_error(self):
         tip = "命令格式错误。\n"
         tip += f"输入 /help {self.name} 查看使用方法."
-        await self._send_msg(tip)
+        await self.send_msg(tip)
 
     # Judge if the arguments are legal based on the parser and send msg if it's illegal
     async def _legal_case(self, argv: list[str]):
@@ -86,7 +86,7 @@ class BotCommand:
         await self._send_format_error()
         return False
 
-    async def _send_msg(self, msg: str | Message):
+    async def send_msg(self, msg: str | Message):
         if not self.session:
             return
         await send_msg(self.bot, self.session.group_id, self.session.user_id, msg)
@@ -99,7 +99,7 @@ class BotCommand:
         if not self.session.group_id == "private":
             self.unlock()
             return
-        await self._send_msg("无效命令，请输入/help获取帮助。")
+        await self.send_msg("无效命令，请输入/help获取帮助。")
         self.unlock()
 
     # Disconnect with the session, you should call in run() before return

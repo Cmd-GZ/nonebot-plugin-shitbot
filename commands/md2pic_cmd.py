@@ -156,7 +156,7 @@ class BotCommandMd2pic(BotCommand):
                 return
             tip = "错误：会话被占用\n"
             tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-            await self._send_msg(tip)
+            await self.send_msg(tip)
             return
 
         self._argv = new_argv
@@ -191,6 +191,6 @@ class BotCommandMd2pic(BotCommand):
         img = await self._render()
 
         msg = Message(MessageSegment.image(img))
-        await self._send_msg(msg)
+        await self.send_msg(msg)
 
         self.unlock()

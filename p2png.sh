@@ -10,8 +10,8 @@ if [ ! -f "$IPATH" ]; then
     exit 1
 fi
 
-if [ ! -d "$(dirname $OPATH)" ]; then
-    mkdir -p "$(dirname $OPATH)"
+if [ ! -d "$(dirname "$OPATH")" ]; then
+    mkdir -p "$(dirname "$OPATH")"
 fi
 
 type=$(file --mime-type -b "$IPATH")

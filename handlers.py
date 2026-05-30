@@ -12,6 +12,7 @@ from nonebot.params import CommandArg
 from .auxs import (
     get_forward_nodes,
     get_images_url,
+    rm_path,
     send_msg,
     send_nodes,
     stuff_download,
@@ -101,6 +102,13 @@ def cmd_register(
 driver = get_driver()
 
 
+@driver.on_startup
+async def startup():
+    await rm_path(config.cache)
+    config.cache.mkdir(parents=True, exist_ok=True)
+    logger.info("nonebot-plugin-shitbot 已加载")
+
+
 @driver.on_shutdown
 async def shutdown():
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -153,7 +161,7 @@ async def handle_msg_convert(bot: Bot, event: MessageEvent):
         return
 
     async with lock:
-        temp_images_dir = config.bot_base / "private" / user_id / str(pid) / "temp"
+        temp_images_dir = config.cache / "private" / user_id / str(pid) / "temp"
         temp_images_dir.mkdir(parents=True, exist_ok=True)
         async with httpx.AsyncClient() as client:
             url_list = await get_images_url(bot, event.reply, event.get_message(), 5)
@@ -249,7 +257,7 @@ async def handle_msg_autoreply(bot: Bot, event: MessageEvent):
             .replace("我", "")
         )
         if cleaned_text in ["csn", "草死你", "操死你", "🌿死你", "艹死你", "zjsncsn"]:
-            wcsn_path = config.client_base / "wcsn.jpg"
+            wcsn_path = config.client_base / "data" / "wcsn.jpg"
             msg = Message(MessageSegment.image(f"file://{wcsn_path}"))
             msg[0].data["sub_type"] = 1
             msg[0].data["summary"] = "喵呜~"
