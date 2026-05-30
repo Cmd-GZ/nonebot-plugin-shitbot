@@ -34,7 +34,7 @@ class BotCommandHelp(BotCommand):
         if not self.session:
             return
         new_argv = args.extract_plain_text().strip().split()
-        # I know it's impossble to be illegal. Just for formalism :)
+        # I know it's impossible to be illegal. Just for formalism :)
         if not await self._legal_case(new_argv):
             if self._argv is None:
                 self.unlock()
@@ -47,7 +47,7 @@ class BotCommandHelp(BotCommand):
         tip = textwrap.dedent("""\
             ```bash
             可用命令：
-            /sesssion    管理当前会话
+            /session    管理当前会话
             /help        显示帮助信息
             /convert     收集图片并批量转换为视频（仅私聊）
             /randpic     随机获取二次元图片
@@ -224,8 +224,8 @@ class BotCommandHelp(BotCommand):
                     --min_w <宽度像素>: 设置最小宽度像素, 默认为 20
                     --max_w <宽度像素>: 设置最大宽度像素, 该值会影响Markdown排版, 默认为 2000
                     --min_h <高度像素>: 设置最小高度像素, 默认为 20
-                    --max_h <高度像素>: 设置最大宽度像素, 默认为 无限
-                注意: --padding, --min_w, --max_w, --min_h, max_h 均只能填入正整数
+                    --max_h <高度像素>: 设置最大高度像素, 默认为 无限
+                注意: --padding, --min_w, --max_w, --min_h, --max_h 均只能填入正整数
                 示例1: 按默认参数输出Markdown文本
                     /md2pic -c
                     # Title

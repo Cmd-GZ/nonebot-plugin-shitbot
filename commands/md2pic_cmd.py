@@ -75,7 +75,7 @@ class BotCommandMd2pic(BotCommand):
                 abs(r - bgr) < delta and abs(g - bgg) < delta and abs(b - bgb) < delta
             )
 
-        def is_colunm_has_content(x: int):
+        def is_column_has_content(x: int):
             for y in range(0, h, 4):
                 pixel: Any = img.getpixel((x, y))
                 r, g, b = int(pixel[0]), int(pixel[1]), int(pixel[2])
@@ -95,25 +95,25 @@ class BotCommandMd2pic(BotCommand):
         content_left, content_right = 0, w
         content_top, content_bottom = 0, h
 
-        # Find out the leftest column that has content
+        # Find out the leftmost column that has content
         for x in range(w):
-            if is_colunm_has_content(x):
+            if is_column_has_content(x):
                 content_left = x
                 break
 
-        # Find out the rightest column that has content
+        # Find out the rightmost column that has content
         for x in range(w - 1, content_left - 1, -1):
-            if is_colunm_has_content(x):
+            if is_column_has_content(x):
                 content_right = x + 1
                 break
 
-        # Find out the topest row that has content
+        # Find out the top row that has content
         for y in range(h):
             if is_row_has_content(y):
                 content_top = y
                 break
 
-        # Find out the bottomest row that has content
+        # Find out the bottom row that has content
         for y in range(h - 1, content_top - 1, -1):
             if is_row_has_content(y):
                 content_bottom = y + 1

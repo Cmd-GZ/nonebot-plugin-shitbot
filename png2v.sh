@@ -1,5 +1,5 @@
 #!/bin/bash
-# usage: ./p2v.sh <Input dir> <output dir>
+# usage: ./png2v.sh <Input dir> <output dir>
 # convert jpg/jpeg/png to a 1s mp4 with the highest possible mass and the smallest possible volume
 
 IMGDIR="$1"

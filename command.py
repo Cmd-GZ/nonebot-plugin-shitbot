@@ -79,7 +79,7 @@ class BotCommand:
         tip += f"输入 /help {self.name} 查看使用方法."
         await self._send_msg(tip)
 
-    # Judge if the arguments is legal based on the parser and send msg if it's illegal
+    # Judge if the arguments are legal based on the parser and send msg if it's illegal
     async def _legal_case(self, argv: list[str]):
         if self._parser.is_valid(argv):
             return True

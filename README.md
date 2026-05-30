@@ -37,8 +37,8 @@
 - 为代码添加更多注释 并按照nonebot所说的插件规范修改代码（？）
 
 - 给史搭一个数据库存起来管理 智能化/shitpost
-  - 提一嘴我打算怎么搭建数据库吧 将史的message键保存为json 如果是forward类型的则将其转换为node列表后打包为{"type": forward, "data": {"content": [node]}} 将json中提及的富媒体信息全部瞎子后重命名为其0xsha256sum值保存 并将json富媒体信息的url替换为对应的本地路径 最后将json重命名为其0xsha256sum值 这样无论是富媒体还是代表史的json文件都可以通过计算哈希值与已有的文件名比对来去重
-  - 添加一个记录json文件元素据的json文件（这算不算元元数据？）类型大概是Dict[str, Dict[str, Any]] 键是史的文件名 也就是哈希值 值中保存着史的：real_id列表 时间戳 好评数 发送失败次数 存储着已经发送过该史的群号的列表
+  - 提一嘴我打算怎么搭建数据库吧 将史的message键保存为json 如果是forward类型的则将其转换为node列表后打包为{"type": forward, "data": {"content": [node]}} 将json中提及的富媒体信息全部下载后重命名为其0xsha256sum值保存 并将json富媒体信息的url替换为对应的本地路径 最后将json重命名为其0xsha256sum值 这样无论是富媒体还是代表史的json文件都可以通过计算哈希值与已有的文件名比对来去重
+  - 添加一个记录json文件元数据的json文件（这算不算元元数据？）类型大概是Dict[str, Dict[str, Any]] 键是史的文件名 也就是哈希值 值中保存着史的：real_id列表 时间戳 好评数 发送失败次数 存储着已经发送过该史的群号的列表
 
   - 添加一个json文件用于记录各个real_id对应的史的哈希值
 
@@ -46,7 +46,7 @@
 
     $$
     \begin{aligned}
-    \small{50 - \frac{100}{\pi}\arctan\left(c_1时间戳 - f(好评数) + c_2 e^{c_3发送失败次数} + \infty\mathbb1_{已经发送过该史的群号}(将要发送史的群号) + \text{ramdom}(0, 最新的史的时间戳与最旧的史的时间戳之差)\right)}
+    \small{50 - \frac{100}{\pi}\arctan\left(c_1时间戳 - f(好评数) + c_2 e^{c_3发送失败次数} + \infty\mathbb1_{已经发送过该史的群号}(将要发送史的群号) + \text{random}(0, 最新的史的时间戳与最旧的史的时间戳之差)\right)}
     \end{aligned}
     $$
 

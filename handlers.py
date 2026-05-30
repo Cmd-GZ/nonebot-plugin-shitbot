@@ -33,7 +33,7 @@ def get_sub_clses(cls: type):
 command_classes = get_sub_clses(BotCommand) + [BotCommand]
 
 
-async def cmd_andler(
+async def cmd_handler(
     bot: Bot,
     matcher: type[Matcher],
     event: MessageEvent,
@@ -93,7 +93,7 @@ def cmd_register(
 
     @matcher.handle()
     async def _handler(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
-        await cmd_andler(bot, matcher, event, cmd_cls, args, only=only, _pid=_pid)
+        await cmd_handler(bot, matcher, event, cmd_cls, args, only=only, _pid=_pid)
 
     return matcher
 
