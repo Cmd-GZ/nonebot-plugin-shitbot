@@ -14,7 +14,6 @@ from .auxs import (
     get_images_url,
     rm_path,
     send_msg,
-    send_nodes,
     stuff_download,
 )
 from .commands import *
@@ -203,23 +202,23 @@ async def handle_msg_shitpost(bot: Bot, event: MessageEvent):
             try:
                 if not msg:
                     return
+                message = msg
                 if msg[0].type == "forward":
                     msg_id = msg[0].data.get("id")
                     if msg_id is None:
                         return
                     forward_data = await bot.get_forward_msg(id=msg_id)
                     forward_msgs = forward_data.get("messages", [])
-                    nodes = get_forward_nodes(
+                    message = get_forward_nodes(
                         forward_msgs, config.max_message_depth, summary="喵~"
                     )
-                    await send_nodes(bot, str(group), "", nodes)
-                    return
-                for seg in msg:
-                    seg.data["summary"] = "喵~"
-                    if seg.data.get("sub_type", 0) != 0:
-                        seg.data["sub_type"] = 1
-                msg[-1].data["summary"] = "喵~"
-                await bot.send_group_msg(group_id=group, message=msg)
+                else:
+                    for seg in message:
+                        seg.data["summary"] = "喵~"
+                        if seg.data.get("sub_type", 0) != 0:
+                            seg.data["sub_type"] = 1
+                    message[-1].data["summary"] = "喵~"
+                await send_msg(bot=bot, group_id=group, msg=message)
                 return
             except Exception as e:
                 if i >= maxtry - 1:
@@ -240,11 +239,12 @@ msg_autoreply = on_message(priority=10, block=False)
 
 @msg_autoreply.handle()
 async def handle_msg_autoreply(bot: Bot, event: MessageEvent):
-    group_id = getattr(event, "group_id", "private")
+    group_id = getattr(event, "group_id", None)
     if event.message_type == "private":
-        group_id = "private"
-    user_id = str(event.user_id)
-
+        group_id = None
+    user_id = event.user_id
+    if group_id is not None:
+        user_id = None
     for seg in event.get_message():
         if seg.type != "text":
             continue
@@ -261,9 +261,9 @@ async def handle_msg_autoreply(bot: Bot, event: MessageEvent):
             msg = Message(MessageSegment.image(f"file://{wcsn_path}"))
             msg[0].data["sub_type"] = 1
             msg[0].data["summary"] = "喵呜~"
-            await send_msg(bot, group_id, user_id, msg)
+            await send_msg(bot=bot, group_id=group_id, user_id=user_id, msg=msg)
             return
         cleaned = text.replace("?", "").replace(" ", "").replace("？", "")
         if cleaned in ["这是你吗", "zsnm", "是你吗"]:
-            await send_msg(bot, group_id, user_id, "是我。")
+            await send_msg(bot=bot, group_id=group_id, user_id=user_id, msg="是我。")
             return

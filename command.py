@@ -89,7 +89,13 @@ class BotCommand:
     async def send_msg(self, msg: str | Message):
         if not self.session:
             return
-        await send_msg(self.bot, self.session.group_id, self.session.user_id, msg)
+        if self.session.group_id == "private":
+            group_id = None
+            user_id = int(self.session.user_id)
+        else:
+            group_id = int(self.session.group_id)
+            user_id = None
+        await send_msg(bot=self.bot, group_id=group_id, user_id=user_id, msg=msg)
 
     # Main function
     async def run(self, args: Message):

@@ -20,6 +20,63 @@ if TYPE_CHECKING:
 bash = shutil.which("bash") or "/bin/bash"
 
 
+async def convert_p_to_png(command: BotCommandConvert):
+    if not command.session:
+        return
+    bot = command.bot
+    temp_images = command.temp_images
+    images = command.images
+    user_id = int(command.session.user_id)
+    output_dir = (
+        config.cache / "private" / command.session.user_id / str(command.pid) / "images"
+    )
+    await rm_path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if_the_last = 0
+
+    async with command.copy_lock:
+        while True:
+            index = len(images)
+            if not command.if_accept_pic:
+                async with command.download_lock:
+                    pass
+                if_the_last = 1
+
+            while True:
+                try:
+                    temp_image = temp_images.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                image = output_dir / (f"{index:05d}.png")
+                index += 1
+                logger.info(
+                    f"执行图片转png脚本: {config.script_p2png_path} {temp_image} {image}"
+                )
+                proc = await asyncio.create_subprocess_exec(
+                    bash,
+                    str(config.script_p2png_path),
+                    str(temp_image),
+                    str(image),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await proc.communicate()
+                if stdout:
+                    logger.info(f"脚本 stdout:\n{stdout.decode()}")
+                if stderr:
+                    logger.warning(f"脚本 stderr:\n{stderr.decode()}")
+                if proc.returncode != 0:
+                    await bot.send_private_msg(
+                        user_id=user_id, message=f"转换失败: {stderr.decode()[:]}"
+                    )
+                    continue
+                images.append(str(image))
+            if if_the_last:
+                return
+            await command.p2png_event.wait()
+            command.p2png_event.clear()
+
+
 async def convert_png_to_v(command: BotCommandConvert):
     images = command.images
     videos = command.videos
@@ -76,13 +133,10 @@ async def convert_send_videos(command: BotCommandConvert):
                 f"发送 {video_file.name} 失败: {e}\n尝试以文件形式发送..."
             )
             try:
-                if command.session is None:
-                    raise Exception("未知错误：命令生命周期提前结束")
-                await command.bot.upload_private_file(
-                    user_id=int(command.session.user_id),
-                    file=str(video_file),
-                    name=video_file.name,
+                msg = Message(
+                    MessageSegment("file", {"file": f"file://{container_path}"})
                 )
+                await command.send_msg(msg)
                 logger.info(f"发送文件成功: {video_file.name}")
             except Exception as e:
                 logger.error(f"发送 {video_file.name} 失败: {e}")
@@ -91,60 +145,3 @@ async def convert_send_videos(command: BotCommandConvert):
             await asyncio.sleep(0.25)
 
     await command.send_msg("视频发送完毕。")
-
-
-async def convert_p_to_png(command: BotCommandConvert):
-    if not command.session:
-        return
-    bot = command.bot
-    temp_images = command.temp_images
-    images = command.images
-    user_id = int(command.session.user_id)
-    output_dir = (
-        config.cache / "private" / command.session.user_id / str(command.pid) / "images"
-    )
-    await rm_path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    if_the_last = 0
-
-    async with command.copy_lock:
-        while True:
-            index = len(images)
-            if not command.if_accept_pic:
-                async with command.download_lock:
-                    pass
-                if_the_last = 1
-
-            while True:
-                try:
-                    temp_image = temp_images.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-                image = output_dir / (f"{index:05d}.png")
-                index += 1
-                logger.info(
-                    f"执行图片转png脚本: {config.script_p2png_path} {temp_image} {image}"
-                )
-                proc = await asyncio.create_subprocess_exec(
-                    bash,
-                    str(config.script_p2png_path),
-                    str(temp_image),
-                    str(image),
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await proc.communicate()
-                if stdout:
-                    logger.info(f"脚本 stdout:\n{stdout.decode()}")
-                if stderr:
-                    logger.warning(f"脚本 stderr:\n{stderr.decode()}")
-                if proc.returncode != 0:
-                    await bot.send_private_msg(
-                        user_id=user_id, message=f"转换失败: {stderr.decode()[:]}"
-                    )
-                    continue
-                images.append(str(image))
-            if if_the_last:
-                return
-            await command.p2png_event.wait()
-            command.p2png_event.clear()
