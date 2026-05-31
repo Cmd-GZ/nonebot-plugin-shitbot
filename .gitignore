@@ -2,4 +2,4 @@ config.yaml
 .VSCodeCounter/
 __pycache__/
 tests/
-docs/
+docs/ignores/

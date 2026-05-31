@@ -253,5 +253,14 @@ async def handle_msg_autoreply(bot: Bot, event: MessageEvent):
             return
         cleaned = text.replace("?", "").replace(" ", "").replace("？", "")
         if cleaned in ["这是你吗", "zsnm", "是你吗"]:
-            await send_msg(bot=bot, group_id=group_id, user_id=user_id, msg="是我。")
+            zsnm_path = config.client_base / "data" / "zsnm.jpg"
+            msg = Message(
+                [
+                    MessageSegment.image(f"file://{zsnm_path}"),
+                    MessageSegment.text("是我。"),
+                ]
+            )
+            msg[0].data["sub_type"] = 1
+            msg[0].data["summary"] = "喵呜~"
+            await send_msg(bot=bot, group_id=group_id, user_id=user_id, msg=msg)
             return
