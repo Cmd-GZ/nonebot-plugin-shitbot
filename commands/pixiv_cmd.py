@@ -92,7 +92,7 @@ class BotCommandPixiv(BotCommand):
         self._argv = new_argv
         self._parser.parse_argv(self._argv)
 
-        r18 = self._parser.opts_value["-r"][0]  # type: ignore[index]
+        r18 = self._parser.opts_value["-r"][0]
 
         if r18 == "on" and self.session.group_id != "private":
             tip = "该功能只能在私聊中使用"
@@ -109,7 +109,7 @@ class BotCommandPixiv(BotCommand):
             return
 
         self._r18 = 1 if r18 == "on" else 0
-        self._size = self._parser.opts_value["-s"][0]  # type: ignore[index]
+        self._size = self._parser.opts_value["-s"][0]
         self._picid = self._parser.value[0]
         await self.send_msg("开始获取图片...")
         api = None

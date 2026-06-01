@@ -47,7 +47,7 @@ class BotCommandMd2pic(BotCommand):
         parser.add_opt("--min_w", required=True, type=int, default=[20])
         parser.add_opt("--max_w", required=True, type=int, default=[2000])
         parser.add_opt("--min_h", required=True, type=int, default=[20])
-        parser.add_opt("--max_h", required=True, type=int, default=None)
+        parser.add_opt("--max_h", required=True, type=int, default=[])
 
         return parser
 
@@ -162,16 +162,16 @@ class BotCommandMd2pic(BotCommand):
         self._argv = new_argv
         self._parser.parse_argv(self._argv)
 
-        self._scale = self._parser.opts_value["-s"][0]  # type: ignore[index]
-        theme = self._parser.opts_value["-t"][0]  # type: ignore[index]
+        self._scale = self._parser.opts_value["-s"][0]
+        theme = self._parser.opts_value["-t"][0]
         self._css = str(Path(__file__).resolve().parent.parent / "css" / f"{theme}.css")
-        self._padding = self._parser.opts_value["--padding"][0]  # type: ignore[index]
-        self._min_w = self._parser.opts_value["--min_w"][0]  # type: ignore[index]
-        self._max_w = self._parser.opts_value["--max_w"][0]  # type: ignore[index]
-        self._min_h = self._parser.opts_value["--min_h"][0]  # type: ignore[index]
+        self._padding = self._parser.opts_value["--padding"][0]
+        self._min_w = self._parser.opts_value["--min_w"][0]
+        self._max_w = self._parser.opts_value["--max_w"][0]
+        self._min_h = self._parser.opts_value["--min_h"][0]
         self._max_h = (
             self._parser.opts_value["--max_h"][0]
-            if self._parser.opts_value["--max_h"] is not None
+            if len(self._parser.opts_value["--max_h"]) == 0
             else None
         )
         self._md = self._parser.value[0]

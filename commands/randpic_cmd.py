@@ -47,11 +47,7 @@ class BotCommandRandpic(BotCommand):
 
         self._argv = new_argv
         self._parser.parse_argv(self._argv)
-        if (
-            self._parser.opts_value["-r"] is None
-            or self._parser.opts_value["-n"] is None
-        ):
-            return  # It's impossible, just for type checking
+
         r18 = self._parser.opts_value["-r"][0]
         num = self._parser.opts_value["-n"][0]
 

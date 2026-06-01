@@ -5,7 +5,7 @@ class BotArgParser:
     def __init__(self):
         self._subparsers: dict[str, BotArgParser] = {}
         self._opts_rule: dict[str, dict[str, Any]] = {}
-        self._opts_value: dict[str, list[Any] | None] = {}
+        self._opts_value: dict[str, list[Any]] = {}
         self._rule: dict[str, Any] = {}
         self._value: list[Any] = []
         self._subcmd: str | None = None
@@ -48,7 +48,7 @@ class BotArgParser:
         choice: list[Any] | None = None,
         type: type = str,
         max_appeared: int = 1,
-        default: list[Any] | None = None,
+        default: list[Any] = [],
     ):
         self._opts_rule[name] = {
             "required": required,
@@ -256,19 +256,23 @@ class BotArgParser:
             if len(sublist) == 0:
                 continue
             option = sublist[0]
+            opt_values = self._opts_value.get(option)
+            if opt_values is None:
+                opt_values = []
             if self._opts_rule[option]["required"]:
                 value = sublist[1]
                 if self._opts_rule[option]["type"] == int:
                     value = int(value)
                 if self._opts_rule[option]["type"] == float:
                     value = float(value)
+                opt_values.append(value)
             else:
-                value = True
-            opt_values = self._opts_value.get(option)
-            if opt_values is None:
-                opt_values = []
-                self._opts_value[option] = opt_values
-            opt_values.append(value)
+                if len(opt_values) == 0:
+                    opt_values = [0]
+                value = opt_values.pop()
+                value += 1
+                opt_values.append(value)
+            self._opts_value[option] = opt_values
 
         for i in range(len(partitioned_last)):
             index = i if i < len(self._rule["types"]) else len(self._rule["types"]) - 1
@@ -281,7 +285,7 @@ class BotArgParser:
 
         for option in options:
             if self._opts_value.get(option) is None:
-                self._opts_value[option] = self._opts_rule[option]["default"]
+                self._opts_value[option] = self._opts_rule[option]["default"][:]
 
         if subcmd is not None:
             self._subcmd = subcmd
