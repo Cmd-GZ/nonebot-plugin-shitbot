@@ -15,8 +15,10 @@ from .auxs import (
 )
 from .commands import *
 from .config import config
+from .permissions import BotPermissions
 from .session import BotSession
 
+permissions = BotPermissions.make()
 shitlock = asyncio.Lock()
 
 

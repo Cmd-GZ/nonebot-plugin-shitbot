@@ -7,8 +7,8 @@ from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
 
 from ..command import BotCommand
-from ..config import config
 from ..parser import BotArgParser
+from ..permissions import permissions
 
 if TYPE_CHECKING:
     from ..session import BotSession
@@ -90,11 +90,15 @@ class BotCommandAdvrandpic(BotCommand):
 
         self._size = self._parser.opts_value["-s"][0]
 
-        if self.session.group_id not in config.whitelist_groups_setu:
+        if not permissions.check_permission(
+            "setu", self.session.group_id, self.session.user_id
+        ):
             self.unlock()
             return
 
-        if self._r18 and self.session.user_id not in config.whitelist_users_setu:
+        if self._r18 and not permissions.check_permission(
+            "nsfw", self.session.group_id, self.session.user_id
+        ):
             self.unlock()
             return
 
