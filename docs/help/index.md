@@ -9,6 +9,7 @@
 | `/convert` | 收集图片并批量处理后发送（仅私聊） |
 | `/randpic` | 随机获取二次元图片 |
 | `/advrandpic` | 随机获取二次元图片，支持指定标签 |
+| `/pixiv` | 根据Pixiv ID从P站获取图片 |
 | `/shitpost` | 将消息转发到多个群聊（仅私聊） |
 | `/md2pic` | 将 markdown 文本转换为图片输出 |
 
