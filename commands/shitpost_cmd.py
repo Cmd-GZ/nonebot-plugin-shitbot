@@ -72,6 +72,11 @@ class BotCommandShitpost(BotCommand):
 
         self._argv = new_argv
 
+        if not self._check_perm("shitpost"):
+            await self.send_msg("权限不足")
+            self.unlock()
+            return
+
         if subcmd == "start":
             groups = self._parser._subparsers[subcmd].value
             exist_groups = await self.bot.get_group_list()

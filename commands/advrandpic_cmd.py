@@ -8,7 +8,6 @@ from nonebot.log import logger
 
 from ..command import BotCommand
 from ..parser import BotArgParser
-from ..permissions import permissions
 
 if TYPE_CHECKING:
     from ..session import BotSession
@@ -60,11 +59,7 @@ class BotCommandAdvrandpic(BotCommand):
         self._parser.parse_argv(self._argv)
 
         r18 = self._parser.opts_value["-r"][0]
-        if r18 != "off" and self.session.group_id != "private":
-            tip = "该功能只能在私聊中使用"
-            await self.send_msg(tip)
-            self.unlock()
-            return
+
         if r18 == "off":
             self._r18 = 0
         if r18 == "on":
@@ -79,20 +74,18 @@ class BotCommandAdvrandpic(BotCommand):
         self._num = self._parser.opts_value["-n"][0]
         self._num = max(self._num, 1)
         self._num = min(self._num, 10)
-        if self.session.group_id != "private":
+        if not self._check_perm("mutlisetu"):
             self._num = 1
 
         self._size = self._parser.opts_value["-s"][0]
 
-        if not permissions.check_permission(
-            "setu", self.session.group_id, self.session.user_id
-        ):
+        if not self._check_perm("setu"):
+            await self.send_msg("权限不足")
             self.unlock()
             return
 
-        if self._r18 and not permissions.check_permission(
-            "nsfw", self.session.group_id, self.session.user_id
-        ):
+        if self._r18 and not self._check_perm("nsfw"):
+            await self.send_msg("权限不足")
             self.unlock()
             return
 
@@ -109,7 +102,7 @@ class BotCommandAdvrandpic(BotCommand):
         async with httpx.AsyncClient() as client:
             response = await client.post(api, headers=headers, json=payload)
         if response.status_code != 200:
-            logger.error(f"api调用失败，状态码{response.status_code}")
+            logger.error(f"api调用失败, 状态码{response.status_code}")
             self.unlock()
             return
 

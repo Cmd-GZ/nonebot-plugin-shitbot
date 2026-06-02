@@ -24,6 +24,7 @@ class BotCommandHelp(BotCommand):
         parser = BotArgParser()
         parser.add_subparser("help")
         parser.add_subparser("session")
+        parser.add_subparser("perm")
         parser.add_subparser("convert")
         parser.add_subparser("randpic")
         parser.add_subparser("shitpost")
@@ -46,6 +47,11 @@ class BotCommandHelp(BotCommand):
         self._parser.parse_argv(self._argv)
         subcmd = self._parser.subcmd
 
+        if not self._check_perm("help"):
+            await self.send_msg("权限不足")
+            self.unlock()
+            return
+
         help_dir = Path(__file__).resolve().parent.parent / "docs" / "help"
         print(help_dir)
         tip = "错误: 帮助文档目录不存在"
@@ -57,6 +63,7 @@ class BotCommandHelp(BotCommand):
         if subcmd in (
             "help",
             "session",
+            "perm",
             "convert",
             "randpic",
             "shitpost",

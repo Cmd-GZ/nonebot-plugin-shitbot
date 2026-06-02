@@ -8,5 +8,5 @@ help: ["是否允许使用help命令", False, [], ["banned"], False, [], ["banne
 md2pic: ["是否允许使用md2pic命令", False, [], ["banned"], False, [], ["banned"]]
 session: ["是否允许使用session命令", False, [], ["banned"], False, [], ["banned"]]
 otherwise: ["是否会在错误命令输入后提示", False, [], ["banned"], False, [], ["banned"]]
-group: ["是否允许使用group命令", False, [], ["banned"], False, [], ["banned"]]
-groupmanager: ["是否允许使用group命令check以外的选项", True, [], ["banned"], True, [], ["banned"]]
+perm: ["是否允许使用perm命令的check选项", False, [], ["banned"], False, [], ["banned"]]
+permmanager: ["是否允许使用perm命令所有选项", True, [], ["banned"], True, [], ["banned"]]

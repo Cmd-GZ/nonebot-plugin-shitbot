@@ -49,6 +49,11 @@ class BotCommandSession(BotCommand):
         self._argv = new_argv
         self._parser.parse_argv(self._argv)
 
+        if not self._check_perm("session"):
+            await self.send_msg("权限不足")
+            self.unlock()
+            return
+
         subcmd = self._parser.subcmd
 
         if subcmd == "switch":

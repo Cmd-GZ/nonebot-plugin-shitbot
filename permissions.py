@@ -3,6 +3,7 @@ from typing import Any
 
 import yaml
 
+from .auxs import validate_schema
 from .config import config
 
 
@@ -16,6 +17,22 @@ class BotPermissions:
     _users: dict[str, list[str]]
     _groups: dict[str, list[str]]
     _entries: dict[str, dict[str, Any]]
+
+    _ENTRY_SCHEMA = {
+        "description": str,
+        "users": {
+            "is_white": bool,
+            "whites": [str],
+            "blacks": [str],
+        },
+        "groups": {
+            "is_white": bool,
+            "whites": [str],
+            "blacks": [str],
+        },
+    }
+
+    _DEFAULT_ENTRY_SCHEMA = [str, bool, [str], [str], bool, [str], [str], None]
 
     def __init__(self, *, _internal=None):
         if _internal is not self._sentinel:
@@ -52,7 +69,10 @@ class BotPermissions:
                 raise ValueError(f"权限文件 {path} 内容不是合法的 YAML 字典")
 
         self._users, self._groups, self._entries = contents
-        if not self._is_entries_valid():
+        if not all(
+            validate_schema(entry, self._ENTRY_SCHEMA)
+            for entry in self._entries.values()
+        ):
             raise ValueError(f"权限文件 {self._perm_entries_path} 中的条目格式错误")
 
         if config.owners is not None:
@@ -73,22 +93,24 @@ class BotPermissions:
             )
 
         default_entries_keys = default_entries.keys()
-        count = 0
+        is_inited = False
         try:
             for key in default_entries_keys:
-                if not self._is_default_entry_valid(default_entries[key]):
+                if len(default_entries[key]) < 7 or not validate_schema(
+                    default_entries[key], self._DEFAULT_ENTRY_SCHEMA
+                ):
                     raise ValueError(
                         f"默认权限文件 {default_entries_path} 中的条目 {key} 格式错误"
                     )
                 if key in self._entries:
-                    count += 1
                     continue
                 self._entries[key] = {"users": {}, "groups": {}}
                 self._init_entry(self._entries[key], default_entries[key])
+                is_inited = True
         except KeyError:
             raise ValueError(f"默认权限文件 {default_entries_path} 格式错误")
 
-        if count >= len(default_entries_keys):
+        if not is_inited:
             return
 
         self.update_entries()
@@ -111,79 +133,14 @@ class BotPermissions:
     def entries(self) -> dict:
         return self._entries
 
-    def _is_entries_valid(self) -> bool:
-        for entry in self._entries.values():
-            key = entry.keys()
-            if "description" not in key or "users" not in key or "groups" not in key:
-                return False
-            if not isinstance(entry["description"], str):
-                return False
-            if not isinstance(entry["users"], dict) or not isinstance(
-                entry["groups"], dict
-            ):
-                return False
-            users_key = entry["users"].keys()
-            groups_key = entry["groups"].keys()
-            if (
-                "is_white" not in users_key
-                or "whites" not in users_key
-                or "blacks" not in users_key
-            ):
-                return False
-            if (
-                "is_white" not in groups_key
-                or "whites" not in groups_key
-                or "blacks" not in groups_key
-            ):
-                return False
-            if not isinstance(entry["users"]["is_white"], bool) or not isinstance(
-                entry["groups"]["is_white"], bool
-            ):
-                return False
-            if not isinstance(entry["users"]["whites"], list) or not all(
-                isinstance(i, str) for i in entry["users"]["whites"]
-            ):
-                return False
-            if not isinstance(entry["users"]["blacks"], list) or not all(
-                isinstance(i, str) for i in entry["users"]["blacks"]
-            ):
-                return False
-            if not isinstance(entry["groups"]["whites"], list) or not all(
-                isinstance(i, str) for i in entry["groups"]["whites"]
-            ):
-                return False
-            if not isinstance(entry["groups"]["blacks"], list) or not all(
-                isinstance(i, str) for i in entry["groups"]["blacks"]
-            ):
-                return False
-        return True
-
-    @staticmethod
-    def _is_default_entry_valid(entryvalues: Any) -> bool:
-        if not isinstance(entryvalues, list):
-            return False
-        if len(entryvalues) != 7:
-            return False
-        if not isinstance(entryvalues[0], str):
-            return False
-        if not isinstance(entryvalues[1], bool) or not isinstance(entryvalues[4], bool):
-            return False
-        for i in (2, 3, 5, 6):
-            if not isinstance(entryvalues[i], list) or not all(
-                isinstance(j, str) for j in entryvalues[i]
-            ):
-                return False
-        return True
-
     @staticmethod
     def _init_entry(entry: dict[str, Any], default_entry: list[Any]):
         entry["description"] = default_entry[0]
-        entry["users"]["is_white"] = default_entry[1]
-        entry["users"]["whites"] = default_entry[2]
-        entry["users"]["blacks"] = default_entry[3]
-        entry["groups"]["is_white"] = default_entry[4]
-        entry["groups"]["whites"] = default_entry[5]
-        entry["groups"]["blacks"] = default_entry[6]
+        index = 1
+        for perm_type in ("users", "groups"):
+            for perm in ("is_white", "whites", "blacks"):
+                entry[perm_type][perm] = default_entry[index]
+                index += 1
 
     def update_users(self):
         with self._perm_users_path.open("w", encoding="utf-8") as f:
@@ -231,6 +188,13 @@ class BotPermissions:
 
     def check_permission(self, entry_name: str, group_id: str, user_id: str) -> bool:
         if user_id in self._users.get("admins", []):
+            return True
+        return self.precheck_permission(entry_name, group_id, user_id)
+
+    def owners_check_permission(
+        self, entry_name: str, group_id: str, user_id: str
+    ) -> bool:
+        if user_id in self._users.get("owners", []):
             return True
         return self.precheck_permission(entry_name, group_id, user_id)
 

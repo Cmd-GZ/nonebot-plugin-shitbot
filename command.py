@@ -6,6 +6,7 @@ from nonebot.adapters.onebot.v11 import Bot, Message
 
 from .auxs import send_msg
 from .parser import BotArgParser
+from .permissions import permissions
 
 if TYPE_CHECKING:
     from .session import BotSession
@@ -96,6 +97,13 @@ class BotCommand:
             group_id = int(self.session.group_id)
             user_id = None
         await send_msg(bot=self.bot, group_id=group_id, user_id=user_id, msg=msg)
+
+    def _check_perm(self, entry_name: str):
+        if not self.session:
+            return False
+        return permissions.check_permission(
+            entry_name, self.session.group_id, self.session.user_id
+        )
 
     # Main function
     async def run(self, args: Message):

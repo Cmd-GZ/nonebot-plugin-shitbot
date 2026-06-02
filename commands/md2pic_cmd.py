@@ -162,6 +162,11 @@ class BotCommandMd2pic(BotCommand):
         self._argv = new_argv
         self._parser.parse_argv(self._argv)
 
+        if self._pid >= 0 and not self._check_perm("md2pic"):
+            await self.send_msg("权限不足")
+            self.unlock()
+            return
+
         self._scale = self._parser.opts_value["-s"][0]
         theme = self._parser.opts_value["-t"][0]
         self._css = str(Path(__file__).resolve().parent.parent / "css" / f"{theme}.css")
@@ -171,7 +176,7 @@ class BotCommandMd2pic(BotCommand):
         self._min_h = self._parser.opts_value["--min_h"][0]
         self._max_h = (
             self._parser.opts_value["--max_h"][0]
-            if len(self._parser.opts_value["--max_h"]) == 0
+            if len(self._parser.opts_value["--max_h"]) > 0
             else None
         )
         self._md = self._parser.value[0]

@@ -6,7 +6,6 @@ from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
 
 from ..command import BotCommand
-from ..config import config
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:
@@ -57,21 +56,18 @@ class BotCommandRandpic(BotCommand):
         if self.session.group_id != "private":
             num = 1
 
-        if r18 == "on" and self.session.group_id != "private":
-            tip = "该功能只能在私聊中使用"
-            await self.send_msg(tip)
+        if not self._check_perm("setu"):
+            await self.send_msg("权限不足")
             self.unlock()
             return
 
-        if self.session.group_id not in config.whitelist_groups_setu:
+        if r18 == "on" and not self._check_perm("nsfw"):
+            await self.send_msg("权限不足")
             self.unlock()
             return
 
         api = "https://manyacg.top/setu"
         if r18 == "on":
-            if self.session.user_id not in config.whitelist_users_setu:
-                self.unlock()
-                return
             api = "https://manyacg.top/sese"
         for i in range(num):
             try:

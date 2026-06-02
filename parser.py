@@ -47,7 +47,7 @@ class BotArgParser:
         necessary: bool = False,
         choice: list[Any] | None = None,
         type: type = str,
-        max_appeared: int = 1,
+        max_appeared: int | None = 1,
         default: list[Any] = [],
     ):
         self._opts_rule[name] = {
@@ -110,7 +110,8 @@ class BotArgParser:
         for i in range(len(ownargv)):
             if ownargv[i] in options:
                 if (
-                    options_count[ownargv[i]]
+                    self._opts_rule[ownargv[i]]["max_appeared"] is not None
+                    and options_count[ownargv[i]]
                     >= self._opts_rule[ownargv[i]]["max_appeared"]
                 ):
                     continue

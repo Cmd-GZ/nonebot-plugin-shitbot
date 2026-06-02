@@ -345,6 +345,11 @@ class BotCommandConvert(BotCommand):
 
             self._argv = new_argv
 
+            if self._pid >= 0 and not self._check_perm("convert"):
+                await self.send_msg("权限不足")
+                self.unlock()
+                return
+
             if subcmd == "start":
                 new_mode = self._parser.subparsers[subcmd].opts_value.get(
                     "-m", ["video"]

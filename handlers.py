@@ -15,10 +15,8 @@ from .auxs import (
 )
 from .commands import *
 from .config import config
-from .permissions import BotPermissions
 from .session import BotSession
 
-permissions = BotPermissions.make()
 shitlock = asyncio.Lock()
 
 
@@ -39,19 +37,10 @@ async def cmd_handler(
     cmd_cls: type,
     args: Message,
     *,
-    only: str | None = None,
     _pid: int | None = None,
 ):
     if cmd_cls not in command_classes:
         return
-
-    if only is not None and only != event.message_type:
-        tip = f"该功能只能在 {only} 下使用"
-        if only == "private":
-            tip = "该功能只能在私聊中使用"
-        if only == "group":
-            tip = "该功能只能在群聊中使用"
-        await matcher.finish(tip)
 
     group_id = str(getattr(event, "group_id", "private"))
     if event.message_type == "private":
@@ -92,7 +81,7 @@ def cmd_register(
 
     @matcher.handle()
     async def _handler(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
-        await cmd_handler(bot, matcher, event, cmd_cls, args, only=only, _pid=_pid)
+        await cmd_handler(bot, matcher, event, cmd_cls, args, _pid=_pid)
 
     return matcher
 
@@ -119,6 +108,8 @@ async def shutdown():
 # ===Commands handlers=== #
 cmd_session = cmd_register("session", BotCommandSession, priority=1, _pid=0)
 
+cmd_perm = cmd_register("perm", BotCommandPerm)
+
 cmd_help = cmd_register("help", BotCommandHelp)
 
 cmd_randpic = cmd_register("randpic", BotCommandRandpic)
@@ -127,9 +118,9 @@ cmd_pixiv = cmd_register("pixiv", BotCommandPixiv)
 
 cmd_advrandpic = cmd_register("advrandpic", BotCommandAdvrandpic)
 
-cmd_convert = cmd_register("convert", BotCommandConvert, only="private")
+cmd_convert = cmd_register("convert", BotCommandConvert)
 
-cmd_shitpost = cmd_register("shitpost", BotCommandShitpost, only="private")
+cmd_shitpost = cmd_register("shitpost", BotCommandShitpost)
 
 cmd_md2pic = cmd_register("md2pic", BotCommandMd2pic)
 

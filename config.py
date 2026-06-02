@@ -18,8 +18,6 @@ class ShitBotConfig(BaseModel):
     script_p2png_path: Path
     script_png2fr_path: Path
     owners: list[str] | None
-    whitelist_groups_setu: list[str]
-    whitelist_users_setu: list[str]
     max_message_depth: int
     pixiv_access_token: str
 

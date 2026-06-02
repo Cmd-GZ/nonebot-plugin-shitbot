@@ -3,6 +3,7 @@ from .advrandpic_cmd import BotCommandAdvrandpic
 from .convert_cmd import BotCommandConvert
 from .help_cmd import BotCommandHelp
 from .md2pic_cmd import BotCommandMd2pic
+from .perm_cmd import BotCommandPerm
 from .pixiv_cmd import BotCommandPixiv
 from .randpic_cmd import BotCommandRandpic
 from .session_cmd import BotCommandSession
@@ -14,6 +15,7 @@ __all__ = [
     "BotCommandConvert",
     "BotCommandHelp",
     "BotCommandMd2pic",
+    "BotCommandPerm",
     "BotCommandPixiv",
     "BotCommandRandpic",
     "BotCommandSession",

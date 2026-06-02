@@ -94,21 +94,18 @@ class BotCommandPixiv(BotCommand):
 
         r18 = self._parser.opts_value["-r"][0]
 
-        if r18 == "on" and self.session.group_id != "private":
-            tip = "该功能只能在私聊中使用"
-            await self.send_msg(tip)
-            self.unlock()
-            return
-
-        if self.session.group_id not in config.whitelist_groups_setu:
-            self.unlock()
-            return
-
-        if self.session.user_id not in config.whitelist_users_setu:
-            self.unlock()
-            return
-
         self._r18 = 1 if r18 == "on" else 0
+
+        if not self._check_perm("setu"):
+            await self.send_msg("权限不足")
+            self.unlock()
+            return
+
+        if self._r18 and not self._check_perm("nsfw"):
+            await self.send_msg("权限不足")
+            self.unlock()
+            return
+
         self._size = self._parser.opts_value["-s"][0]
         self._picid = self._parser.value[0]
         await self.send_msg("开始获取图片...")
