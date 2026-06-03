@@ -49,7 +49,7 @@ class BotArgParser:
         choice: list[str] | None = None,
         type: type = str,
         max_appeared: int | None = 1,
-        default: list[Any] = [],
+        default: list[Any] | None = None,
     ):
         self._opts_rule[name] = {
             "required": required,
@@ -57,7 +57,7 @@ class BotArgParser:
             "choice": choice,
             "type": type,
             "max_appeared": max_appeared,
-            "default": default,
+            "default": default if default is not None else [],
         }
 
     def set_rule(
@@ -277,7 +277,7 @@ class BotArgParser:
 
         for option in options:
             if self._opts_value.get(option) is None:
-                self._opts_value[option] = self._opts_rule[option]["default"][:]
+                self._opts_value[option] = self._opts_rule[option]["default"]
 
         if subcmd is not None:
             self._subcmd = subcmd
