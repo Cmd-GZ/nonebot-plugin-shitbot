@@ -105,7 +105,7 @@ class BotCommandPerm(BotCommand):
         return parser
 
     @staticmethod
-    async def _invert(flag: bool, exp: bool):
+    def _invert(flag: bool, exp: bool):
         if flag:
             return not exp
         return exp
