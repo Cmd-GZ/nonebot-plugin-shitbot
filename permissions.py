@@ -3,7 +3,7 @@ from typing import Any
 
 import yaml
 
-from .auxs import validate_schema
+from .aux import validate_schema
 from .config import config
 
 

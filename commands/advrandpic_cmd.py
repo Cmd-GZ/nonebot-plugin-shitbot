@@ -68,13 +68,13 @@ class BotCommandAdvrandpic(BotCommand):
             self._r18 = 1
 
         tags = self._parser.opts_value["-t"]
-        if tags is not None:
+        if len(tags) > 0:
             self._tag = tags[0].split("&")
 
         self._num = self._parser.opts_value["-n"][0]
         self._num = max(self._num, 1)
         self._num = min(self._num, 10)
-        if not self._check_perm("mutlisetu"):
+        if not self._check_perm("multisetu"):
             self._num = 1
 
         self._size = self._parser.opts_value["-s"][0]

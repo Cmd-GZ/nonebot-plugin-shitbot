@@ -9,6 +9,7 @@ class BotArgParser:
         self._rule: dict[str, Any] = {}
         self._value: list[Any] = []
         self._subcmd: str | None = None
+        self.err: str = ""
         self.set_rule()
 
     @property
@@ -45,7 +46,7 @@ class BotArgParser:
         *,
         required: bool = False,
         necessary: bool = False,
-        choice: list[Any] | None = None,
+        choice: list[str] | None = None,
         type: type = str,
         max_appeared: int | None = 1,
         default: list[Any] = [],
@@ -74,16 +75,9 @@ class BotArgParser:
             "need_subcmd": need_subcmd,
         }
 
-    def _is_int(self, s: str) -> bool:
+    def _can_convert(self, s: str, t: type) -> bool:
         try:
-            int(s)
-            return True
-        except ValueError:
-            return False
-
-    def _is_float(self, s: str) -> bool:
-        try:
-            float(s)
+            t(s)
             return True
         except ValueError:
             return False
@@ -92,14 +86,14 @@ class BotArgParser:
         self, argv: list[str]
     ) -> tuple[list[list[str]], str | None, list[str]]:
         subparsers = self._subparsers.keys()
-        ownargv = argv
+        own_argv = argv
         subcmd = None
-        subargv = []
+        aub_argv = []
         for i in range(len(argv)):
             if argv[i] in subparsers:
                 subcmd = argv[i]
-                ownargv = argv[:i]
-                subargv = argv[i + 1 :]
+                own_argv = argv[:i]
+                aub_argv = argv[i + 1 :]
                 break
 
         options = self._opts_rule.keys()
@@ -107,128 +101,136 @@ class BotArgParser:
         partitioned = []
 
         prev = 0
-        for i in range(len(ownargv)):
-            if ownargv[i] in options:
+        for i in range(len(own_argv)):
+            if own_argv[i] in options:
                 if (
-                    self._opts_rule[ownargv[i]]["max_appeared"] is not None
-                    and options_count[ownargv[i]]
-                    >= self._opts_rule[ownargv[i]]["max_appeared"]
+                    self._opts_rule[own_argv[i]]["max_appeared"] is not None
+                    and options_count[own_argv[i]]
+                    >= self._opts_rule[own_argv[i]]["max_appeared"]
                 ):
                     continue
-                options_count[ownargv[i]] += 1
-                partitioned.append(ownargv[prev:i])
+                options_count[own_argv[i]] += 1
+                partitioned.append(own_argv[prev:i])
                 prev = i
-        partitioned.append(ownargv[prev:])
-        return (partitioned, subcmd, subargv)
+        partitioned.append(own_argv[prev:])
+        return (partitioned, subcmd, aub_argv)
+
+    def _tidy_partitioned(self, partitioned: list[list[str]]) -> list[str] | None:
+        # Separate partitioned into [option args parts] and the normal arguments part
+        # partitioned should be the result[0] of self._partition
+        # partitioned will store [option args parts]
+        # the function will return the normal arguments part
+        partitioned_last = partitioned.pop(-1)
+        # the first case
+        if len(partitioned) < 1:
+            return partitioned_last
+
+        # the second case
+        if self._opts_rule[partitioned_last[0]]["required"]:
+            partitioned.append(partitioned_last[0:2])
+            partitioned_last.pop(0)
+        else:
+            partitioned.append(partitioned_last[0:1])
+        try:
+            partitioned_last.pop(0)
+            return partitioned_last
+        except IndexError:
+            return None
 
     def is_valid(self, argv: list[str]) -> bool:
-        partitioned, subcmd, subargv = self._partition(argv)
-        lenp = len(partitioned)
-        if lenp == 0:
+        partitioned, subcmd, aub_argv = self._partition(argv)
+        partitioned_length = len(partitioned)
+        if partitioned_length == 0:
             return False
-        if lenp >= 2 and partitioned[0] != []:
+        if partitioned_length >= 2 and len(partitioned[0]) != 0:
+            self.err = "Invalid arguments: " + " ".join(partitioned[0])
             return False
 
+        # there are 2 rest cases of partitioned: [[value ...]] and [[], [option, value ...], [option, value ...], ..., [option, value ...]]
+
+        partitioned_last = self._tidy_partitioned(partitioned)
+        if partitioned_last is None:
+            self.err = "Invalid arguments: " + argv[-1]
+            return False
+        # Now partitioned is [[], [option, value ...], [option, value ...], ...] or []
+        # partitioned_last is [value ...]
+
+        # judge partitioned
         options = self._opts_rule.keys()
         necessary_options = [
             option for option, rule in self._opts_rule.items() if rule["necessary"]
         ]
-        for sublist in partitioned[:-1]:
+        for sublist in partitioned:
             sub_len = len(sublist)
-            if sub_len >= 3:
+            # fully igealled case
+            if sub_len > 2:
+                self.err = "Invalid arguments: " + " ".join(sublist)
                 return False
+            # for partitioned[0], partitioned[i] is empty iff i = 0
             if sub_len == 0:
                 continue
-            if sublist[0] not in options:
+            option = sublist[0]
+            # for non-exist option
+            if option not in options:
+                self.err = "Invalid arguments: " + " ".join(sublist)
                 return False
-            if self._opts_rule[sublist[0]]["required"] and sub_len == 1:
-                return False
-            if not self._opts_rule[sublist[0]]["required"] and sub_len == 2:
-                return False
-            if (
-                sub_len == 2
-                and self._opts_rule[sublist[0]]["type"] == int
-                and not self._is_int(sublist[1])
+            # for required
+            if (self._opts_rule[sublist[0]]["required"] and sub_len == 1) or (
+                not self._opts_rule[sublist[0]]["required"] and sub_len == 2
             ):
+                self.err = "Invalid arguments: " + " ".join(sublist)
                 return False
-            if (
-                sub_len == 2
-                and self._opts_rule[sublist[0]]["type"] == float
-                and not self._is_float(sublist[1])
+            # now sub_len == 2 iff sublist[0] requires an argument (required=True)
+            # for type
+            if sub_len == 2 and not self._can_convert(
+                sublist[1], self._opts_rule[sublist[0]]["type"]
             ):
+                self.err = "Invalid arguments: " + " ".join(sublist)
                 return False
+            # for choice
             if (
                 sub_len == 2
                 and self._opts_rule[sublist[0]]["choice"] is not None
                 and sublist[1] not in self._opts_rule[sublist[0]]["choice"]
             ):
+                self.err = "Invalid arguments: " + " ".join(sublist)
                 return False
+            # for necessary
             if sublist[0] in necessary_options:
                 necessary_options.remove(sublist[0])
 
-        partitioned_last = partitioned[-1]
-        if lenp >= 2:
-            if partitioned_last[0] not in options:
-                return False
-            if (
-                self._opts_rule[partitioned_last[0]]["required"]
-                and len(partitioned_last) == 1
-            ):
-                return False
-            if (
-                self._opts_rule[partitioned_last[0]]["required"]
-                and self._opts_rule[partitioned_last[0]]["type"] == int
-                and not self._is_int(partitioned_last[1])
-            ):
-                return False
-            if (
-                self._opts_rule[partitioned_last[0]]["required"]
-                and self._opts_rule[partitioned_last[0]]["type"] == float
-                and not self._is_float(partitioned_last[1])
-            ):
-                return False
-            if (
-                self._opts_rule[partitioned_last[0]]["required"]
-                and self._opts_rule[partitioned_last[0]]["choice"] is not None
-                and partitioned_last[1]
-                not in self._opts_rule[partitioned_last[0]]["choice"]
-            ):
-                return False
-            if partitioned_last[0] in necessary_options:
-                necessary_options.remove(partitioned_last[0])
-            if self._opts_rule[partitioned_last[0]]["required"]:
-                partitioned_last = partitioned_last[2:]
-            else:
-                partitioned_last = partitioned_last[1:]
-
-        partitioned_last_len = len(partitioned_last)
-        if partitioned_last_len < self._rule["min"]:
-            return False
-        if self._rule["max"] is not None and partitioned_last_len > self._rule["max"]:
-            return False
-        for i in range(partitioned_last_len):
-            if self._rule["types"] is None:
-                break
-            index = i if i < len(self._rule["types"]) else len(self._rule["types"]) - 1
-            if self._rule["types"][index] == int and not self._is_int(
-                partitioned_last[i]
-            ):
-                return False
-            if self._rule["types"][index] == float and not self._is_float(
-                partitioned_last[i]
-            ):
-                return False
-
+        # for necessary
         if necessary_options:
+            self.err = f"options are necessary: {', '.join(necessary_options)}"
             return False
+
+        # judge partitioned_last
+        # for the number of normal arguments
+        length_last = len(partitioned_last)
+        if (length_last < self._rule["min"]) or (
+            self._rule["max"] is not None and length_last > self._rule["max"]
+        ):
+            self.err = "Invalid arguments: " + " ".join(partitioned_last)
+            return False
+        # for the types
+        length_types = len(self._rule["types"])
+        for i in range(len(partitioned_last)):
+            value = partitioned_last[i]
+            if not self._can_convert(
+                value, self._rule["types"][i if i < length_types else -1]
+            ):
+                self.err = "Invalid arguments: " + " ".join(partitioned_last)
+                return False
 
         if subcmd is None and self._rule["need_subcmd"]:
+            self.err = "subcommand is necessary"
             return False
 
         if subcmd is not None:
             if subcmd not in self._subparsers:
                 return False
-            if not self._subparsers[subcmd].is_valid(subargv):
+            if not self._subparsers[subcmd].is_valid(aub_argv):
+                self.err = self._subparsers[subcmd].err
                 return False
 
         return True
@@ -241,17 +243,12 @@ class BotArgParser:
         self._value = []
         self._subcmd = None
 
-        partitioned, subcmd, subargv = self._partition(argv)
+        partitioned, subcmd, aub_argv = self._partition(argv)
         options = self._opts_rule.keys()
 
-        partitioned_last = partitioned.pop(-1)
-        if len(partitioned) >= 1:
-            if self._opts_rule[partitioned_last[0]]["required"]:
-                partitioned.append(partitioned_last[0:2])
-                partitioned_last.pop(0)
-            else:
-                partitioned.append(partitioned_last[0:1])
-            partitioned_last.pop(0)
+        partitioned_last = self._tidy_partitioned(partitioned)
+        if partitioned_last is None:
+            raise ValueError("Invalid arguments")
 
         for sublist in partitioned:
             if len(sublist) == 0:
@@ -262,10 +259,7 @@ class BotArgParser:
                 opt_values = []
             if self._opts_rule[option]["required"]:
                 value = sublist[1]
-                if self._opts_rule[option]["type"] == int:
-                    value = int(value)
-                if self._opts_rule[option]["type"] == float:
-                    value = float(value)
+                value = self._opts_rule[option]["type"](value)
                 opt_values.append(value)
             else:
                 if len(opt_values) == 0:
@@ -278,10 +272,7 @@ class BotArgParser:
         for i in range(len(partitioned_last)):
             index = i if i < len(self._rule["types"]) else len(self._rule["types"]) - 1
             value = partitioned_last[i]
-            if self._rule["types"][index] == int:
-                value = int(value)
-            if self._rule["types"][index] == float:
-                value = float(value)
+            value = self._rule["types"][index](value)
             self._value.append(value)
 
         for option in options:
@@ -290,4 +281,4 @@ class BotArgParser:
 
         if subcmd is not None:
             self._subcmd = subcmd
-            self._subparsers[subcmd].parse_argv(subargv)
+            self._subparsers[subcmd].parse_argv(aub_argv)

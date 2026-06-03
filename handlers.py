@@ -7,7 +7,7 @@ from nonebot.log import logger
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
-from .auxs import (
+from .aux import (
     get_forward_nodes,
     get_images_url,
     rm_path,

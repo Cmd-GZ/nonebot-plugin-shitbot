@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from nonebot.adapters.onebot.v11 import Bot, Message
 
-from .auxs import send_msg
+from .aux import send_msg
 from .parser import BotArgParser
 from .permissions import permissions
 
@@ -76,7 +76,7 @@ class BotCommand:
         return BotArgParser()
 
     async def _send_format_error(self):
-        tip = "命令格式错误。\n"
+        tip = f"命令格式错误:\n{self._parser.err}\n"
         tip += f"输入 /help {self.name} 查看使用方法."
         await self.send_msg(tip)
 
@@ -110,7 +110,7 @@ class BotCommand:
         if not self.session:
             self.unlock()
             return
-        if not self.session.group_id == "private":
+        if not self._check_perm("otherwise"):
             self.unlock()
             return
         await self.send_msg("无效命令，请输入/help获取帮助。")

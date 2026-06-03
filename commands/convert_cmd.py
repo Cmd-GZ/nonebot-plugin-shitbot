@@ -10,7 +10,7 @@ import httpx
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
 
-from ..auxs import rm_cache, stuff_download
+from ..aux import rm_cache, stuff_download
 from ..command import BotCommand
 from ..config import config
 from ..parser import BotArgParser

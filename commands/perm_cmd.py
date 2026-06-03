@@ -82,7 +82,7 @@ class BotCommandPerm(BotCommand):
 
         # === /perm entry -t <user|group> <subcommand> [options] <entry name 1> [entry name 2] ... ===
         entry = parser.add_subparser("entry")
-        entry.set_rule(max=0)
+        entry.set_rule(max=0, need_subcmd=True)
         entry.add_opt("-t", required=True, necessary=True, choice=["user", "group"])
 
         # whitelist -s <on|off> <entry name>
@@ -103,6 +103,12 @@ class BotCommandPerm(BotCommand):
         blacks.add_opt("-R", required=True, max_appeared=None)
 
         return parser
+
+    @staticmethod
+    async def _invert(flag: bool, exp: bool):
+        if flag:
+            return not exp
+        return exp
 
     async def _check(self):
         if self.session is None:
@@ -151,142 +157,91 @@ class BotCommandPerm(BotCommand):
     async def _info(self):
         if self.session is None:
             return
-        tip = "用户权限组信息:\n"
-        for key in self._U:
-            tip += f"{key}:\n{permissions.users.get(key, '未创建')}\n"
-        tip += "群组权限组信息:\n"
-        for key in self._G:
-            tip += f"{key}:\n{permissions.groups.get(key, '未创建')}\n"
-        tip += "权限项信息:\n"
-        for key in self._E:
-            tip += f"{key}:\n{permissions.entries.get(key, '未创建')}\n"
+        tip = "权限元素信息:\n"
+        for title, elems, elemsdic in (
+            ("用户权限组:\n", self._U, permissions.users),
+            ("群组权限组:\n", self._G, permissions.groups),
+            ("权限项:\n", self._E, permissions.entries),
+        ):
+            tip += title
+            for key in elems:
+                tip += f"{key}:\n{elemsdic.get(key, '未创建')}\n"
         await self.send_msg(tip)
 
-    async def _create(self):
-        if self.session is None:
+    async def _perm_group(self, mode: str):
+        if self.session is None or mode not in ["create", "delete"]:
             return
-        try:
-            for key in self._U:
-                if key in permissions.users:
-                    await self.send_msg(f"警告: 用户权限组 {key} 已存在")
-                    continue
-                permissions.users[key] = []
-            for key in self._G:
-                if key in permissions.groups:
-                    await self.send_msg(f"警告: 群组权限组 {key} 已存在")
-                    continue
-                permissions.groups[key] = []
-            if len(self._U) > 0:
-                permissions.update_users()
-            if len(self._G) > 0:
-                permissions.update_groups()
-            await self.send_msg("创建成功")
-        except Exception as e:
-            await self.send_msg(f"创建失败：{e}")
+        verb = "创建" if mode == "create" else "删除"
+        flag = False if mode == "create" else True
+        ptcl = "已" if mode == "create" else "不"
 
-    async def _delete(self):
-        if self.session is None:
+        def _op(flag: bool, dic: dict, key: str):
+            if flag:
+                return dic.pop(key)
+            dic[key] = []
+
+        try:
+            for perms, permsdic, updatefunc, norm in (
+                (self._U, permissions.users, permissions.update_users, "用户"),
+                (self._G, permissions.groups, permissions.update_groups, "群组"),
+            ):
+                is_edited = False
+                for key in perms:
+                    if self._invert(flag, (key in permsdic)):
+                        await self.send_msg(f"警告: {norm}权限组 {key} {ptcl}存在")
+                        continue
+                    _op(flag, permsdic, key)
+                    is_edited = True
+                if is_edited:
+                    updatefunc()
+
+            await self.send_msg(f"{verb}成功")
+        except Exception as e:
+            await self.send_msg(f"{verb}失败：{e}")
+
+    async def _perm_mem(self, mode: str):
+        if self.session is None or mode not in ["add", "remove"]:
             return
+        verb = "添加" if mode == "add" else "移除"
+        flag = False if mode == "add" else True
+        ptcl = "已" if mode == "add" else "不"
+
+        def _op(flag: bool, list: list, elem: str):
+            if flag:
+                return list.remove(elem)
+            list.append(elem)
+
         try:
-            for key in self._U:
-                temp = permissions.users.pop(key, None)
-                if temp is None:
-                    await self.send_msg(f"警告: 用户权限组 {key} 不存在")
-            for key in self._G:
-                temp = permissions.groups.pop(key, None)
-                if temp is None:
-                    await self.send_msg(f"警告: 群组权限组 {key} 不存在")
-            if len(self._U) > 0:
-                permissions.update_users()
-            if len(self._G) > 0:
-                permissions.update_groups()
-            await self.send_msg("删除成功")
+            for perms, mems, permsdic, updatefunc, norm in (
+                (self._U, self._u, permissions.users, permissions.update_users, "用户"),
+                (
+                    self._G,
+                    self._g,
+                    permissions.groups,
+                    permissions.update_groups,
+                    "群组",
+                ),
+            ):
+                length = min(len(perms), len(mems))
+                is_edited = False
+                for i in range(length):
+                    perm = permsdic.get(perms[i])
+                    if perm is None:
+                        await self.send_msg(f"警告: {norm}权限组 {perms[i]} 不存在")
+                        continue
+                    if self._invert(flag, (mems[i] in perm)):
+                        await self.send_msg(
+                            f"警告: {norm}权限组 {perms[i]} 中{ptcl}存在{norm} {mems[i]}"
+                        )
+                        continue
+                    _op(flag, perm, mems[i])
+                    is_edited = True
+                if is_edited:
+                    updatefunc()
+
+            await self.send_msg(f"{verb}成功")
         except Exception as e:
-            await self.send_msg(f"删除失败：{e}")
-
-    async def _add(self):
-        if self.session is None:
-            return
-        try:
-            length = min(len(self._U), len(self._u))
-            is_edited = False
-            for i in range(length):
-                users = permissions.users.get(self._U[i])
-                if users is None:
-                    await self.send_msg(f"警告: 用户权限组 {self._U[i]} 不存在")
-                    continue
-                if self._u[i] in users:
-                    await self.send_msg(
-                        f"警告: 用户权限组 {self._U[i]} 中已存在用户 {self._u[i]}"
-                    )
-                    continue
-                users.append(self._u[i])
-                is_edited = True
-            if is_edited:
-                permissions.update_users()
-
-            length = min(len(self._G), len(self._g))
-            is_edited = False
-            for i in range(length):
-                groups = permissions.groups.get(self._G[i])
-                if groups is None:
-                    await self.send_msg(f"警告: 群组权限组 {self._G[i]} 不存在")
-                    continue
-                if self._g[i] in groups:
-                    await self.send_msg(
-                        f"警告: 群组权限组 {self._G[i]} 中已存在群组 {self._g[i]}"
-                    )
-                    continue
-                groups.append(self._g[i])
-                is_edited = True
-            if is_edited:
-                permissions.update_groups()
-
-            await self.send_msg("添加成功")
-        except Exception as e:
-            await self.send_msg(f"添加失败：{e}")
-
-    async def _remove(self):
-        if self.session is None:
-            return
-        try:
-            length = min(len(self._U), len(self._u))
-            is_edited = False
-            for i in range(length):
-                users = permissions.users.get(self._U[i])
-                if users is None:
-                    await self.send_msg(f"警告: 用户权限组 {self._U[i]} 不存在")
-                    continue
-                if self._u[i] not in users:
-                    await self.send_msg(
-                        f"警告: 用户权限组 {self._U[i]} 中不存在用户 {self._u[i]}"
-                    )
-                    continue
-                users.remove(self._u[i])
-                is_edited = True
-            if is_edited:
-                permissions.update_users()
-
-            length = min(len(self._G), len(self._g))
-            is_edited = False
-            for i in range(length):
-                groups = permissions.groups.get(self._G[i])
-                if groups is None:
-                    await self.send_msg(f"警告: 群组权限组 {self._G[i]} 不存在")
-                    continue
-                if self._g[i] not in groups:
-                    await self.send_msg(
-                        f"警告: 群组权限组 {self._G[i]} 中不存在群组 {self._g[i]}"
-                    )
-                    continue
-                groups.remove(self._g[i])
-                is_edited = True
-            if is_edited:
-                permissions.update_groups()
-
-            await self.send_msg("移除成功")
-        except Exception as e:
-            await self.send_msg(f"移除失败：{e}")
+            await self.send_msg(f"{verb}失败：{e}")
 
     async def _whitelist(self):
         if self.session is None:
@@ -305,64 +260,36 @@ class BotCommandPerm(BotCommand):
         except Exception as e:
             await self.send_msg(f"设置失败：{e}")
 
-    async def _whites(self):
-        if self.session is None:
+    async def _perm_entry(self, mode: str):
+        if self.session is None or mode not in ["whites", "blacks"]:
             return
-        try:
-            is_edited = False
-            for key in self._entries:
-                if key not in permissions.entries:
-                    await self.send_msg(f"警告: 权限项 {key} 不存在")
-                    continue
-                whites = permissions.entries[key][self._t]["whites"]
-                for perms in self._A:
-                    if perms in whites:
-                        await self.send_msg(
-                            f"警告: 权限项 {key} 的白名单中已存在权限组 {perms}"
-                        )
-                        continue
-                    whites.append(perms)
-                    is_edited = True
-                for perms in self._R:
-                    if perms not in whites:
-                        await self.send_msg(
-                            f"警告: 权限项 {key} 的白名单中不存在权限组 {perms}"
-                        )
-                        continue
-                    whites.remove(perms)
-                    is_edited = True
-            if is_edited:
-                permissions.update_entries()
-            await self.send_msg("设置成功")
-        except Exception as e:
-            await self.send_msg(f"设置失败：{e}")
+        adj = "白" if mode == "whites" else "黑"
 
-    async def _blacks(self):
-        if self.session is None:
-            return
+        def _op(flag: bool, list: list, elem: str):
+            if flag:
+                return list.remove(elem)
+            list.append(elem)
+
         try:
             is_edited = False
             for key in self._entries:
                 if key not in permissions.entries:
                     await self.send_msg(f"警告: 权限项 {key} 不存在")
                     continue
-                blacks = permissions.entries[key][self._t]["blacks"]
-                for perms in self._A:
-                    if perms in blacks:
-                        await self.send_msg(
-                            f"警告: 权限项 {key} 的黑名单中已存在权限组 {perms}"
-                        )
-                        continue
-                    blacks.append(perms)
-                    is_edited = True
-                for perms in self._R:
-                    if perms not in blacks:
-                        await self.send_msg(
-                            f"警告: 权限项 {key} 的黑名单中不存在权限组 {perms}"
-                        )
-                        continue
-                    blacks.remove(perms)
-                    is_edited = True
+                perms_list = permissions.entries[key][self._t][mode]
+                for operated_list, flag, ptcl in (
+                    (self._A, False, "已"),
+                    (self._R, True, "不"),
+                ):
+                    for perms in operated_list:
+                        if self._invert(flag, (perms in perms_list)):
+                            await self.send_msg(
+                                f"警告: 权限项 {key} 的{adj}名单中{ptcl}存在权限组 {perms}"
+                            )
+                            continue
+                        _op(flag, perms_list, perms)
+                        is_edited = True
+
             if is_edited:
                 permissions.update_entries()
             await self.send_msg("设置成功")
@@ -397,12 +324,12 @@ class BotCommandPerm(BotCommand):
             return
         subsubcmd = None
 
-        nomanager = not permissions.owners_check_permission(
+        no_manager = not permissions.owners_check_permission(
             "permmanager", self.session.group_id, self.session.user_id
         ) and not self._check_perm("permmanager")
 
-        if (nomanager and subcmd != "check") or (
-            subcmd == "check" and not self._check_perm("perm") and nomanager
+        if (no_manager and subcmd != "check") or (
+            subcmd == "check" and not self._check_perm("perm") and no_manager
         ):
             await self.send_msg("权限不足")
             self.unlock()
@@ -459,19 +386,13 @@ class BotCommandPerm(BotCommand):
             await self._list()
         if subcmd == "info":
             await self._info()
-        if subcmd == "create":
-            await self._create()
-        if subcmd == "delete":
-            await self._delete()
-        if subcmd == "add":
-            await self._add()
-        if subcmd == "remove":
-            await self._remove()
+        if subcmd in ("create", "delete"):
+            await self._perm_group(subcmd)
+        if subcmd in ("add", "remove"):
+            await self._perm_mem(subcmd)
         if subsubcmd == "whitelist":
             await self._whitelist()
-        if subsubcmd == "whites":
-            await self._whites()
-        if subsubcmd == "blacks":
-            await self._blacks()
+        if subsubcmd in ("whites", "blacks"):
+            await self._perm_entry(subsubcmd)
 
         self.unlock()
