@@ -53,10 +53,10 @@ class BotCommandRandpic(BotCommand):
         num = max(num, 1)
         num = min(num, 10)
 
-        if self.session.group_id != "private":
+        if not self._check_perm("multisetu"):
             num = 1
 
-        if not self._check_perm("setu"):
+        if not self._check_perm("randpic"):
             await self.send_msg("权限不足")
             self.unlock()
             return

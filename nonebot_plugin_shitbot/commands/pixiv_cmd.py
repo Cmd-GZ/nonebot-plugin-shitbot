@@ -96,7 +96,7 @@ class BotCommandPixiv(BotCommand):
 
         self._r18 = 1 if r18 == "on" else 0
 
-        if not self._check_perm("setu"):
+        if not self._check_perm("pixiv"):
             await self.send_msg("权限不足")
             self.unlock()
             return

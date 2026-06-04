@@ -1,0 +1,14 @@
+[project]
+name = "nonebot-plugin-shitbot"
+version = "0.1.0"
+description = "NoneBot shitpost plugin"
+requires-python = ">=3.10"
+dependencies = [
+    "nonebot-plugin-htmlrender>=0.6.7",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+[tool.nonebot.plugins]
+nonebot-plugin-shitbot = ["nonebot_plugin_shitbot"]
+nonebot-plugin-htmlrender = ["nonebot_plugin_htmlrender"]

@@ -1,4 +1,4 @@
-config.yaml
-.VSCodeCounter/
 __pycache__/
-docs/ignores/
+nonebot_plugin_shitbot/config.yaml
+.VSCodeCounter/
+nonebot_plugin_shitbot/docs/ignores/

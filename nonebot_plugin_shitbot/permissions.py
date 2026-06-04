@@ -93,7 +93,15 @@ class BotPermissions:
             )
 
         default_entries_keys = default_entries.keys()
+        entries_keys = self._entries.keys()
+        deleted_keys = []
         is_inited = False
+        for key in entries_keys:
+            if key not in default_entries_keys:
+                deleted_keys.append(key)
+                is_inited = True
+        for key in deleted_keys:
+            del self._entries[key]
         try:
             for key in default_entries_keys:
                 if len(default_entries[key]) < 7 or not validate_schema(

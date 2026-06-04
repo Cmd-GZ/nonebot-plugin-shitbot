@@ -1,10 +1,11 @@
-from parser import BotArgParser
+"""Unit tests for BotArgParser — no NoneBot initialization needed."""
 
 import pytest
+from nonebot_plugin_shitbot.parser import BotArgParser
 
 
 class TestOptRequired:
-    def test_required_opt_missing_vaule_invalid(self):
+    def test_required_opt_missing_value_invalid(self):
         parser = BotArgParser()
         parser.add_opt("-a", required=True)
         assert not parser.is_valid(["-a"])
@@ -40,7 +41,6 @@ class TestOptRequired:
         parser.parse_argv(["-a", "1", "-a", "2"])
         assert parser.opts_value["-a"] == ["1", "2"]
         parser.parse_argv(["-a", "1", "-a", "2", "-a", "3"])
-
         assert parser.opts_value["-a"] == ["1", "2", "3"]
 
     def test_not_required_take_zero_arg(self):
@@ -152,7 +152,7 @@ class TestValsRange:
         assert not parser.is_valid([])
         assert not parser.is_valid(["1", "2", "3"])
 
-    def test_values_max_equals_none_iff_inifity_length(self):
+    def test_values_max_equals_none_iff_infinity_length(self):
         parser = BotArgParser()
         parser.set_rule(min=1, max=None)
         parser.parse_argv(["a"] * 114514)
@@ -181,7 +181,7 @@ class TestValsTypes:
         assert all(isinstance(i, int) for i in parser.value[3:])
 
 
-class TestValsNeeedSubcmd:
+class TestValsNeedSubcmd:
     def test_if_parser_with_need_subcmd_and_no_subcmd_is_invalid(self):
         parser = BotArgParser()
         parser.add_subparser("a")
@@ -190,7 +190,7 @@ class TestValsNeeedSubcmd:
 
 
 class TestOptValsComb:
-    def test_if_opt_will_be_parsed_as_a_normal_value_after_apprared_max_appeared_times(
+    def test_if_opt_will_be_parsed_as_a_normal_value_after_appeared_max_appeared_times(
         self,
     ):
         parser = BotArgParser()
@@ -293,7 +293,7 @@ class TestSubcmd:
         assert a.opts_value["-u"] == [1]
         assert a.opts_value["-v"] == [1]
 
-    def test_if_parsr_argv_raise_when_give_it_an_invalid_argv(self):
+    def test_if_parse_argv_raise_when_give_it_an_invalid_argv(self):
         parser = BotArgParser()
         parser.add_opt("-v", required=True)
         with pytest.raises(ValueError):

@@ -79,7 +79,7 @@ class BotCommandAdvrandpic(BotCommand):
 
         self._size = self._parser.opts_value["-s"][0]
 
-        if not self._check_perm("setu"):
+        if not self._check_perm("advrandpic"):
             await self.send_msg("权限不足")
             self.unlock()
             return

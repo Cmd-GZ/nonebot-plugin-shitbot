@@ -1,5 +1,7 @@
 # entryname: [description, users.is_white, users.whites, users.blacks, groups.is_white, groups.whites, groups.blacks]
-setu: ["是否允许使用获取二次元图片相关的命令", False, [], ["banned"], True, ["setu"], ["banned"]]
+randpic: ["是否允许使用randpic命令", False, [], ["banned"], True, ["setu"], ["banned"]]
+advrandpic: ["是否允许使用advrandpic命令", False, [], ["banned"], True, ["setu"], ["banned"]]
+pixiv: ["是否允许使用pixiv命令", False, [], ["banned"], True, ["setu"], ["banned"]]
 nsfw: ["是否允许修改二次元图片相关命令的-r选项", True, ["nsfw"], ["banned"], True, ["nsfw"], ["banned"]]
 multisetu: ["是否允许一次获取多张二次元图片", False, [], ["banned"], True, ["multipic"], ["banned"]]
 convert: ["是否允许使用convert命令", True, ["convert"], ["banned"], True, ["convert"], ["banned"]]
