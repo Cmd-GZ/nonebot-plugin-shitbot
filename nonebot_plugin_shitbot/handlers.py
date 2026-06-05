@@ -20,15 +20,15 @@ from .session import BotSession
 shitlock = asyncio.Lock()
 
 
-def get_sub_clses(cls: type):
-    registry = []
+def collect_class_hierarchy(cls: type):
+    registry = [cls]
     for subclass in cls.__subclasses__():
         registry.append(subclass)
+        registry.extend(collect_class_hierarchy(subclass))
     return registry
 
 
-command_classes = get_sub_clses(BotCommand) + [BotCommand]
-
+command_classes = collect_class_hierarchy(BotCommand)
 
 async def cmd_handler(
     bot: Bot,
@@ -72,16 +72,15 @@ def cmd_register(
     name: str,
     cmd_cls: type,
     *,
-    only: str | None = None,
     priority: int = 2,
     block: bool = True,
     _pid: int | None = None,
 ):
     matcher = on_command(name, priority=priority, block=block)
 
-    @matcher.handle()
     async def _handler(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
         await cmd_handler(bot, matcher, event, cmd_cls, args, _pid=_pid)
+    matcher.handle()(_handler)
 
     return matcher
 
@@ -134,10 +133,11 @@ msg_convert = on_message(priority=10, block=False)
 
 @msg_convert.handle()
 async def handle_msg_convert(bot: Bot, event: MessageEvent):
-    if event.message_type != "private":
-        return
+    group_id = str(getattr(event, "group_id", "private"))
+    if event.message_type == "private":
+        group_id = "private"
     user_id = str(event.user_id)
-    session = BotSession.get_obj("private", user_id)
+    session = BotSession.get_obj(group_id, user_id)
     if not session:
         return
     if (command := session.commands.get(session.curpid)) is None:

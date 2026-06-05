@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 class BotSession:
     _commands: dict[int, BotCommand]
-    _objs: dict[tuple[str, str], BotSession] = {}
+    _objs: dict[str, dict[str, BotSession]] = {}
     _sentinel = object()
 
     # DON'T FUCKING CALL ME!
@@ -27,12 +27,11 @@ class BotSession:
 
     @classmethod
     def make(cls, group_id: str, user_id: str) -> BotSession:
-        key = (group_id, user_id)
-        obj = cls._objs.get(key)
-        if obj:
+        obj = cls._objs.get(user_id, {}).get(group_id)
+        if obj is not None:
             return obj
-        cls._objs[key] = cls(group_id, user_id, _internal=cls._sentinel)
-        return cls._objs[key]
+        cls._objs.setdefault(group_id, {})[user_id] = cls(group_id, user_id, _internal=cls._sentinel)
+        return cls._objs[group_id][user_id]
 
     @property
     def group_id(self) -> str:
@@ -57,12 +56,18 @@ class BotSession:
         self._curpid = pid
 
     @classmethod
+    def get_group_objs(cls, group_id: str) -> list[BotSession]:
+        return list(cls._objs.get(group_id, {}).values())
+
+    @classmethod
     def get_obj(cls, group_id: str, user_id: str) -> BotSession | None:
-        return cls._objs.get((group_id, user_id))
+        return cls._objs.get(group_id, {}).get(user_id)
 
     @classmethod
     def rm_obj(cls, group_id: str, user_id: str) -> None:
-        cls._objs.pop((group_id, user_id), None)
+        cls._objs.get(group_id, {}).pop(user_id, None)
+        if cls._objs.get(group_id) == {}:
+            cls._objs.pop(group_id, None)
 
     def release(self):
         if self._commands == {}:
