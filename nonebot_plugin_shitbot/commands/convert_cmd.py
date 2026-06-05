@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
-from ..aux import rm_cache, stuff_download
+from ..aux import get_images_url, rm_cache, stuff_download
 from ..command import BotCommand
 from ..config import config
 from ..parser import BotArgParser
@@ -38,20 +38,8 @@ class BotCommandConvert(BotCommand):
         self._outputs: asyncio.Queue[str | EndOfQueue] = asyncio.Queue()
 
     @property
-    def if_accept_pic(self):
-        return self._if_accept_pic
-
-    @property
     def outputs(self):
         return self._outputs
-
-    @property
-    def prod_lock(self):
-        return self._prod_lock
-
-    @property
-    def urls(self):
-        return self._urls
 
     def _init_parser(self):
         parser = BotArgParser()
@@ -312,6 +300,16 @@ class BotCommandConvert(BotCommand):
         await rm_cache(self.session.group_id, self.session.user_id, str(self._pid))
         self.unlock()
         return
+
+    async def roger(self, event: MessageEvent):
+        async with self._prod_lock:
+            if not self._if_accept_pic:
+                return
+            url_list = await get_images_url(
+                self.bot, event.reply, event.get_message(), config.max_message_depth
+            )
+            for url in url_list:
+                await self._urls.put(url)
 
     async def run(self, args: Message):
         async with self._runlock:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nonebot.adapters.onebot.v11 import Bot, Message
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 
 from .aux import send_msg
 from .parser import BotArgParser
@@ -87,16 +87,29 @@ class BotCommand:
         await self._send_format_error()
         return False
 
-    async def send_msg(self, msg: str | Message):
+    async def send_msg(
+        self,
+        msg: str | Message,
+        *,
+        group_id: str | None = None,
+        user_id: str | None = None,
+    ):
         if not self.session:
             return
-        if self.session.group_id == "private":
-            group_id = None
-            user_id = int(self.session.user_id)
+        gid, uid = group_id, user_id
+        if gid is None:
+            gid = self.session.group_id
+        if uid is None:
+            uid = self.session.user_id
+        if gid == "public":
+            return
+        if gid == "private":
+            gid = None
+            uid = int(uid)
         else:
-            group_id = int(self.session.group_id)
-            user_id = None
-        await send_msg(bot=self.bot, group_id=group_id, user_id=user_id, msg=msg)
+            gid = int(gid)
+            uid = None
+        await send_msg(bot=self.bot, group_id=gid, user_id=uid, msg=msg)
 
     def _check_perm(self, entry_name: str):
         if not self.session:
@@ -104,6 +117,9 @@ class BotCommand:
         return permissions.check_permission(
             entry_name, self.session.group_id, self.session.user_id
         )
+
+    async def roger(self, event: MessageEvent):
+        pass
 
     # Main function
     async def run(self, args: Message):

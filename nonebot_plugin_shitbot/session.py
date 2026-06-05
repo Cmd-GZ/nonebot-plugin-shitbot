@@ -27,10 +27,12 @@ class BotSession:
 
     @classmethod
     def make(cls, group_id: str, user_id: str) -> BotSession:
-        obj = cls._objs.get(user_id, {}).get(group_id)
+        obj = cls.get_obj(group_id, user_id)
         if obj is not None:
             return obj
-        cls._objs.setdefault(group_id, {})[user_id] = cls(group_id, user_id, _internal=cls._sentinel)
+        cls._objs.setdefault(group_id, {})[user_id] = cls(
+            group_id, user_id, _internal=cls._sentinel
+        )
         return cls._objs[group_id][user_id]
 
     @property

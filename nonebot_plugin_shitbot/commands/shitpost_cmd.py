@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from typing import TYPE_CHECKING
 
-from nonebot.adapters.onebot.v11 import Bot, Message
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
+from nonebot.log import logger
 
+from ..aux import get_forward_nodes, send_msg
 from ..command import BotCommand
+from ..config import config
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:
@@ -20,6 +24,7 @@ class BotCommandShitpost(BotCommand):
         self._is_forwardable = False
         self._groups = []
         self._event = asyncio.Event()
+        self._shitlock = asyncio.Lock()
 
     @property
     def is_forwardable(self):
@@ -41,6 +46,47 @@ class BotCommandShitpost(BotCommand):
         start.set_rule(min=1, types=[int])
         stop.set_rule(max=0)
         return parser
+
+    async def roger(self, event: MessageEvent):
+        msg = event.get_message()
+
+        if not self._is_forwardable:
+            return
+
+        async def _send(group: int, msg: Message, maxtry: int):
+            for i in range(maxtry):
+                try:
+                    if not msg:
+                        return
+                    message = msg
+                    if msg[0].type == "forward":
+                        msg_id = msg[0].data.get("id")
+                        if msg_id is None:
+                            return
+                        forward_data = await self.bot.get_forward_msg(id=msg_id)
+                        forward_msgs = forward_data.get("messages", [])
+                        message = get_forward_nodes(
+                            forward_msgs, config.max_message_depth, summary="喵~"
+                        )
+                    else:
+                        for seg in message:
+                            seg.data["summary"] = "喵~"
+                            if seg.data.get("sub_type", 0) != 0:
+                                seg.data["sub_type"] = 1
+                        message[-1].data["summary"] = "喵~"
+                    await send_msg(bot=self.bot, group_id=group, msg=message)
+                    return
+                except Exception as e:
+                    if i >= maxtry - 1:
+                        logger.error(f"转发失败:{e}")
+                        return
+                    logger.error(f"转发失败，准备第{i + 1}次重试")
+                    await asyncio.sleep(0.25)
+
+        async with self._shitlock:
+            for group in self.groups:
+                asyncio.create_task(_send(group, msg, 3))
+            await asyncio.sleep(random.randint(30, 120))
 
     async def run(self, args: Message):
         if not self.session:

@@ -6,8 +6,8 @@ Pure logic unit tests should go under tests/unit/ instead.
 
 import os
 
-import pytest
 import nonebot
+import pytest
 from nonebot.adapters.onebot.v11 import Adapter as V11Adapter
 from nonebug import NONEBOT_START_LIFESPAN
 from pytest_asyncio import is_async_test

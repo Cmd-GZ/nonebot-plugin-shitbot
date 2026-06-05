@@ -1,23 +1,17 @@
 import asyncio
-import random
 
 from nonebot import get_driver, on_command, on_message
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 from nonebot.log import logger
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
 from .aux import (
-    get_forward_nodes,
-    get_images_url,
     rm_path,
-    send_msg,
 )
 from .commands import *
 from .config import config
 from .session import BotSession
-
-shitlock = asyncio.Lock()
 
 
 def collect_class_hierarchy(cls: type):
@@ -29,6 +23,7 @@ def collect_class_hierarchy(cls: type):
 
 
 command_classes = collect_class_hierarchy(BotCommand)
+
 
 async def cmd_handler(
     bot: Bot,
@@ -80,6 +75,7 @@ def cmd_register(
 
     async def _handler(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
         await cmd_handler(bot, matcher, event, cmd_cls, args, _pid=_pid)
+
     matcher.handle()(_handler)
 
     return matcher
@@ -93,6 +89,12 @@ async def startup():
     await rm_path(config.cache)
     config.cache.mkdir(parents=True, exist_ok=True)
     logger.info("nonebot-plugin-shitbot 已加载")
+
+
+@driver.on_bot_connect
+async def bot_connect(bot: Bot):
+    session = BotSession.make("public", "autoreply")
+    BotCommandAutoReplyMain.make(bot, session, _pid=session.curpid)
 
 
 @driver.on_shutdown
@@ -123,139 +125,26 @@ cmd_shitpost = cmd_register("shitpost", BotCommandShitpost)
 
 cmd_md2pic = cmd_register("md2pic", BotCommandMd2pic)
 
+cmd_autoreply = cmd_register("autoreply", BotCommandAutoreply)
+
 cmd_otherwise = cmd_register("", BotCommand, priority=3)
 
 # ===Messages handlers=== #
 
+msg_manager = on_message(priority=10, block=False)
 
-msg_convert = on_message(priority=10, block=False)
 
-
-@msg_convert.handle()
-async def handle_msg_convert(bot: Bot, event: MessageEvent):
+@msg_manager.handle()
+async def handle_msg_manager(event: MessageEvent):
     group_id = str(getattr(event, "group_id", "private"))
     if event.message_type == "private":
         group_id = "private"
     user_id = str(event.user_id)
+    sessions = BotSession.get_group_objs("public")
     session = BotSession.get_obj(group_id, user_id)
-    if not session:
-        return
-    if (command := session.commands.get(session.curpid)) is None:
-        return
-    if not isinstance(command, BotCommandConvert):
-        return
-    lock = command.prod_lock
-    urls = command.urls
-    if lock is None:
-        return
-
-    async with lock:
-        if not command.if_accept_pic:
-            return
-        url_list = await get_images_url(
-            bot, event.reply, event.get_message(), config.max_message_depth
-        )
-        for url in url_list:
-            await urls.put(url)
-
-
-msg_shitpost = on_message(priority=10, block=False)
-
-
-@msg_shitpost.handle()
-async def handle_msg_shitpost(bot: Bot, event: MessageEvent):
-    if event.message_type != "private":
-        return
-    user_id = str(event.user_id)
-    session = BotSession.get_obj("private", user_id)
-    if not session:
-        return
-    command = session.commands.get(session.curpid)
-    if not command:
-        return
-    if not isinstance(command, BotCommandShitpost):
-        return
-    if not command.is_forwardable:
-        return
-    groups = command.groups
-    msg = event.get_message()
-
-    async def _send(group: int, msg: Message, maxtry: int):
-        for i in range(maxtry):
-            try:
-                if not msg:
-                    return
-                message = msg
-                if msg[0].type == "forward":
-                    msg_id = msg[0].data.get("id")
-                    if msg_id is None:
-                        return
-                    forward_data = await bot.get_forward_msg(id=msg_id)
-                    forward_msgs = forward_data.get("messages", [])
-                    message = get_forward_nodes(
-                        forward_msgs, config.max_message_depth, summary="喵~"
-                    )
-                else:
-                    for seg in message:
-                        seg.data["summary"] = "喵~"
-                        if seg.data.get("sub_type", 0) != 0:
-                            seg.data["sub_type"] = 1
-                    message[-1].data["summary"] = "喵~"
-                await send_msg(bot=bot, group_id=group, msg=message)
-                return
-            except Exception as e:
-                if i >= maxtry - 1:
-                    logger.error(f"转发失败:{e}")
-                    return
-                logger.error(f"转发失败，准备第{i + 1}次重试")
-                await asyncio.sleep(0.25)
-
-    async with shitlock:
-        for group in groups:
-            asyncio.create_task(_send(group, msg, 3))
-        await asyncio.sleep(random.randint(30, 120))
-
-
-# Simple auto reply, just for fun :). May be reconstructed in future.
-msg_autoreply = on_message(priority=10, block=False)
-
-
-@msg_autoreply.handle()
-async def handle_msg_autoreply(bot: Bot, event: MessageEvent):
-    group_id = getattr(event, "group_id", None)
-    if event.message_type == "private":
-        group_id = None
-    user_id = event.user_id
-    if group_id is not None:
-        user_id = None
-    for seg in event.get_message():
-        if seg.type != "text":
+    if session is not None:
+        sessions.append(session)
+    for session in sessions:
+        if (command := session.commands.get(session.curpid)) is None:
             continue
-        text = seg.data.get("text", "")
-        cleaned_text = (
-            text.replace("!", "")
-            .replace(" ", "")
-            .replace("！", "")
-            .replace("w", "")
-            .replace("我", "")
-        )
-        if cleaned_text in ["csn", "草死你", "操死你", "🌿死你", "艹死你", "zjsncsn"]:
-            wcsn_path = config.client_base / "data" / "wcsn.jpg"
-            msg = Message(MessageSegment.image(f"file://{wcsn_path}"))
-            msg[0].data["sub_type"] = 1
-            msg[0].data["summary"] = "喵呜~"
-            await send_msg(bot=bot, group_id=group_id, user_id=user_id, msg=msg)
-            return
-        cleaned = text.replace("?", "").replace(" ", "").replace("？", "")
-        if cleaned in ["这是你吗", "zsnm", "是你吗"]:
-            zsnm_path = config.client_base / "data" / "zsnm.jpg"
-            msg = Message(
-                [
-                    MessageSegment.image(f"file://{zsnm_path}"),
-                    MessageSegment.text("是我。"),
-                ]
-            )
-            msg[0].data["sub_type"] = 1
-            msg[0].data["summary"] = "喵呜~"
-            await send_msg(bot=bot, group_id=group_id, user_id=user_id, msg=msg)
-            return
+        await command.roger(event)

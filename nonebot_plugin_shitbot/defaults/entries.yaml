@@ -12,3 +12,4 @@ session: ["是否允许使用session命令", False, [], ["banned"], False, [], [
 otherwise: ["是否会在错误命令输入后提示", False, [], ["banned"], False, [], ["banned"]]
 perm: ["是否允许使用perm命令的check选项", False, [], ["banned"], False, [], ["banned"]]
 permmanager: ["是否允许使用perm命令所有选项", True, [], ["banned"], True, [], ["banned"]]
+autoreplymanager: ["是否允许使用autoreply命令所有选项", True, [], ["banned"], True, [], ["banned"]]
