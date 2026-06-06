@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import TYPE_CHECKING
+import uuid
+import httpx
+from typing import TYPE_CHECKING, Any
 
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment, MessageEvent
 from nonebot.log import logger
 
-from ..aux import get_forward_nodes, send_msg
+from ..aux import get_forward_nodes, send_msg, message_to_list, get_multimedias_url, stuff_download
 from ..command import BotCommand
 from ..config import config
 from ..parser import BotArgParser
@@ -23,7 +25,7 @@ class BotCommandShitpost(BotCommand):
         super().__init__(bot, session, _pid=_pid, _internal=_internal)
         self._is_forwardable = False
         self._groups = []
-        self._event = asyncio.Event()
+        self._prod_lock = asyncio.Lock()
         self._shitlock = asyncio.Lock()
 
     @property
@@ -34,9 +36,21 @@ class BotCommandShitpost(BotCommand):
     def groups(self):
         return self._groups
 
-    @property
-    def event(self):
-        return self._event
+    @staticmethod
+    def _msg_url_to_file(msg: list[dict[str, Any]], paths: list[str], depth: int):
+        for seg in msg:
+            if paths == []:
+                continue
+            if seg["type"] in ["image", "video", "file"]:
+                data = {"file": f"file://{paths.pop(0)}", "summary": "喵~"}
+                seg["data"] = data
+                continue
+            if depth <= 0:
+                continue
+            if seg["type"] == "forward" or seg["type"] == "node":
+                msgs = seg["data"].get("content")
+                BotCommandShitpost._msg_url_to_file(msgs, paths, depth - 1)
+                continue
 
     def _init_parser(self):
         parser = BotArgParser()
@@ -48,45 +62,43 @@ class BotCommandShitpost(BotCommand):
         return parser
 
     async def roger(self, event: MessageEvent):
-        msg = event.get_message()
-
         if not self._is_forwardable:
             return
+        if self.session is None:
+            return
+        msg = event.get_message()
+        async with self._prod_lock:
+            msg_list = await message_to_list(self.bot, msg)
+            urls = get_multimedias_url(msg_list, config.max_message_depth)
+            medias = []
+            medias_path = []
+            media_dir = config.cache / self.session.group_id / self.session.user_id / str(self._pid) / "medias"
+            media_dir.mkdir(parents=True, exist_ok=True)
+            for url in urls:
+                media_path = media_dir / f"{uuid.uuid4().hex}"
+                async with httpx.AsyncClient() as client:
+                    await stuff_download(client, url, media_path)
+                    container_path = config.client_base / media_path.relative_to(
+                        config.bot_base
+                    )
+                    medias_path.append(media_path)
+                    medias.append(str(container_path))
 
-        async def _send(group: int, msg: Message, maxtry: int):
-            for i in range(maxtry):
-                try:
-                    if not msg:
-                        return
-                    message = msg
-                    if msg[0].type == "forward":
-                        msg_id = msg[0].data.get("id")
-                        if msg_id is None:
-                            return
-                        forward_data = await self.bot.get_forward_msg(id=msg_id)
-                        forward_msgs = forward_data.get("messages", [])
-                        message = get_forward_nodes(
-                            forward_msgs, config.max_message_depth, summary="喵~"
-                        )
-                    else:
-                        for seg in message:
-                            seg.data["summary"] = "喵~"
-                            if seg.data.get("sub_type", 0) != 0:
-                                seg.data["sub_type"] = 1
-                        message[-1].data["summary"] = "喵~"
-                    await send_msg(bot=self.bot, group_id=group, msg=message)
-                    return
-                except Exception as e:
-                    if i >= maxtry - 1:
-                        logger.error(f"转发失败:{e}")
-                        return
-                    logger.error(f"转发失败，准备第{i + 1}次重试")
-                    await asyncio.sleep(0.25)
-
+        self._msg_url_to_file(msg_list, medias, config.max_message_depth)
+        if msg_list == []:
+            return
+        if len(msg_list) == 1 and msg_list[0]["type"] == "forward":
+            msg = msg_list[0]["data"].get("content")
+        else:
+            msg = Message(MessageSegment(seg["type"], seg["data"]) for seg in msg_list)
         async with self._shitlock:
-            for group in self.groups:
-                asyncio.create_task(_send(group, msg, 3))
-            await asyncio.sleep(random.randint(30, 120))
+            for group in self._groups:
+                await self.send_msg(msg, group_id=group)
+            for path in medias_path:
+                path.unlink()
+            rand = random.randint(60, 300)
+            logger.info(f"等待 {rand} 秒后再次发送")
+            await asyncio.sleep(rand)
 
     async def run(self, args: Message):
         if not self.session:

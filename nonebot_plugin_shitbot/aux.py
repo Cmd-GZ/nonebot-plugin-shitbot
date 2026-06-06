@@ -212,11 +212,7 @@ def get_multimedias_url(
 
         if seg["type"] == "forward" or seg["type"] == "node":
             msgs = seg["data"].get("content")
-            if msgs is None:
-                continue
-            for inner_seg in msgs:
-                inner_msg = [inner_seg]
-                rax += get_multimedias_url(inner_msg, depth - 1, basetypes=basetypes)
+            rax += get_multimedias_url(msgs, depth - 1, basetypes=basetypes)
             continue
 
     return rax
