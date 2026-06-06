@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 
@@ -89,7 +89,7 @@ class BotCommand:
 
     async def send_msg(
         self,
-        msg: str | Message,
+        msg: str | Message | list[dict[str, Any]],
         *,
         group_id: str | None = None,
         user_id: str | None = None,

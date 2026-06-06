@@ -139,7 +139,7 @@ def get_forward_nodes(
         content = []
         if (
             len(forward_msg.get("message", [])) == 1
-            and forward_msg.get("message", [])[0]["type"] == "forward"
+            and forward_msg.get("message", [{}])[0].get("type") == "forward"
         ):
             if depth <= 0:
                 continue
@@ -173,75 +173,50 @@ def get_forward_nodes(
 
     return nodes
 
+async def message_to_list(bot: Bot, msg: Message) -> list[dict[str, Any]]:
+    res = []
+    for seg in msg:
+        if seg.type == "forward":
+            msg_id = seg.data.get("id")
+            if msg_id is None:
+                continue
+            forward_data = await bot.get_forward_msg(id=msg_id)
+            forward_msgs = forward_data.get("messages", [])
+            content = get_forward_nodes(forward_msgs, config.max_message_depth)
+            seg.data["content"] = content
+        res.append({"type": seg.type, "data": seg.data})
+    return res
 
-async def get_images_url(
-    bot: Bot, event_reply: Reply | None, event_msg: Message, depth: int
+_MSG_SCHEMA = [
+    {
+        "type": str,
+        "data": dict,
+    }
+]
+
+def get_multimedias_url(
+    msg: list[dict[str, Any]], depth: int, *, basetypes: list[str] = ["image", "video", "file"]
 ) -> list[str]:
     rax = []
-
-    reply_segs = []
-    if event_reply:
-        reply_msgs = await bot.get_msg(message_id=event_reply.message_id)
-        reply_segs = Message(
-            [MessageSegment(seg["type"], seg["data"]) for seg in reply_msgs["message"]]
-        )
-
-    segs = reply_segs + event_msg
-
-    for seg in segs:
-        if seg.type not in ["image", "forward", "reply"]:
-            continue
-        if seg.type != "image" and depth <= 0:
-            continue
-
+    if not validate_schema(msg, _MSG_SCHEMA):
+        return []
+    for seg in msg:
         # base case
-        if seg.type == "image":
-            url = seg.data.get("url", "")
-            if not url:
-                continue
+        if seg["type"] in basetypes:
+            url = seg["data"].get("url", "")
             rax.append(url)
             continue
 
-        msg_id = seg.data.get("id", "")
-        if not msg_id:
+        if depth <= 0:
             continue
 
-        # rec case 1
-        if seg.type == "reply":
-            try:
-                reply_msg = await bot.get_msg(message_id=msg_id)
-                reply_segs = Message(
-                    [
-                        MessageSegment(seg["type"], seg["data"])
-                        for seg in reply_msg["message"]
-                    ]
-                )
-                rax += await get_images_url(bot, None, reply_segs, depth - 1)
-            except Exception as e:
-                logger.error(f"获取引用消息失败 (ID: {msg_id}): {e}")
-            continue
-
-        if seg.type == "forward":
-            forward_msgs = seg.data.get("content")
-            if forward_msgs is None:
-                try:
-                    forward_data = await bot.call_api(
-                        "get_forward_msg", message_id=msg_id
-                    )
-                    forward_msgs = forward_data.get("messages", [])
-                except Exception as e:
-                    logger.error(f"获取转发消息失败 (ID: {msg_id}): {e}")
-                    continue
-            if not forward_msgs:
+        if seg["type"] == "forward" or seg["type"] == "node":
+            msgs = seg["data"].get("content")
+            if msgs is None:
                 continue
-            for forward_msg in forward_msgs:
-                message_segs = Message(
-                    [
-                        MessageSegment(seg["type"], seg["data"])
-                        for seg in forward_msg.get("message", [])
-                    ]
-                )
-                rax += await get_images_url(bot, None, message_segs, depth - 1)
+            for inner_seg in msgs:
+                inner_msg = [inner_seg]
+                rax += get_multimedias_url(inner_msg, depth - 1, basetypes=basetypes)
             continue
 
     return rax
