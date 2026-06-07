@@ -3,13 +3,19 @@ from __future__ import annotations
 import asyncio
 import random
 import uuid
-import httpx
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment, MessageEvent
+import httpx
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
-from ..aux import get_forward_nodes, send_msg, message_to_list, get_multimedias_url, stuff_download
+from ..aux import (
+    DataVarable,
+    dump_message,
+    get_multimedias_url,
+    modify_msg_data,
+    stuff_download,
+)
 from ..command import BotCommand
 from ..config import config
 from ..parser import BotArgParser
@@ -23,6 +29,8 @@ class BotCommandShitpost(BotCommand):
 
     def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         super().__init__(bot, session, _pid=_pid, _internal=_internal)
+        self._min = 0
+        self._max = 0
         self._is_forwardable = False
         self._groups = []
         self._prod_lock = asyncio.Lock()
@@ -36,28 +44,14 @@ class BotCommandShitpost(BotCommand):
     def groups(self):
         return self._groups
 
-    @staticmethod
-    def _msg_url_to_file(msg: list[dict[str, Any]], paths: list[str], depth: int):
-        for seg in msg:
-            if paths == []:
-                continue
-            if seg["type"] in ["image", "video", "file"]:
-                data = {"file": f"file://{paths.pop(0)}", "summary": "喵~"}
-                seg["data"] = data
-                continue
-            if depth <= 0:
-                continue
-            if seg["type"] == "forward" or seg["type"] == "node":
-                msgs = seg["data"].get("content")
-                BotCommandShitpost._msg_url_to_file(msgs, paths, depth - 1)
-                continue
-
     def _init_parser(self):
         parser = BotArgParser()
         parser.set_rule(max=0, need_subcmd=True)
         start = parser.add_subparser("start")
         stop = parser.add_subparser("stop")
         start.set_rule(min=1, types=[int])
+        start.add_opt("--min", required=True, type=float, default=[0])
+        start.add_opt("--max", required=True, type=float, default=[0])
         stop.set_rule(max=0)
         return parser
 
@@ -68,11 +62,17 @@ class BotCommandShitpost(BotCommand):
             return
         msg = event.get_message()
         async with self._prod_lock:
-            msg_list = await message_to_list(self.bot, msg)
-            urls = get_multimedias_url(msg_list, config.max_message_depth)
+            msg_dumpped = await dump_message(self.bot, msg)
+            urls = get_multimedias_url(msg_dumpped, config.max_message_depth)
             medias = []
             medias_path = []
-            media_dir = config.cache / self.session.group_id / self.session.user_id / str(self._pid) / "medias"
+            media_dir = (
+                config.cache
+                / self.session.group_id
+                / self.session.user_id
+                / str(self._pid)
+                / "medias"
+            )
             media_dir.mkdir(parents=True, exist_ok=True)
             for url in urls:
                 media_path = media_dir / f"{uuid.uuid4().hex}"
@@ -84,19 +84,32 @@ class BotCommandShitpost(BotCommand):
                     medias_path.append(media_path)
                     medias.append(str(container_path))
 
-        self._msg_url_to_file(msg_list, medias, config.max_message_depth)
-        if msg_list == []:
+        msg_dumpped = modify_msg_data(
+            msg_dumpped,
+            {
+                "file": DataVarable([f"file://{path}" for path in medias]),
+                "summary": "喵~",
+            },
+            ["image", "video", "file"],
+            config.max_message_depth,
+            replace=True,
+        )
+        if msg_dumpped == []:
             return
-        if len(msg_list) == 1 and msg_list[0]["type"] == "forward":
-            msg = msg_list[0]["data"].get("content")
+        if len(msg_dumpped) == 1 and msg_dumpped[0]["type"] == "forward":
+            msg = msg_dumpped[0]["data"].get("content")
         else:
-            msg = Message(MessageSegment(seg["type"], seg["data"]) for seg in msg_list)
+            msg = Message(
+                MessageSegment(seg["type"], seg["data"]) for seg in msg_dumpped
+            )
         async with self._shitlock:
             for group in self._groups:
                 await self.send_msg(msg, group_id=group)
             for path in medias_path:
                 path.unlink()
-            rand = random.randint(60, 300)
+            if self._max <= self._min:
+                return
+            rand = random.uniform(self._min, self._max)
             logger.info(f"等待 {rand} 秒后再次发送")
             await asyncio.sleep(rand)
 
@@ -137,6 +150,10 @@ class BotCommandShitpost(BotCommand):
 
         if subcmd == "start":
             groups = self._parser._subparsers[subcmd].value
+            self._min = self._parser._subparsers[subcmd].opts_value["--min"][0]
+            self._max = self._parser._subparsers[subcmd].opts_value["--max"][0]
+            self._min = max(0, self._min)
+            self._max = max(0, self._max)
             exist_groups = await self.bot.get_group_list()
             for group in groups:
                 if all(

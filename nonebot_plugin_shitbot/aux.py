@@ -1,10 +1,9 @@
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 import httpx
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
-from nonebot.adapters.onebot.v11.event import Reply
+from nonebot.adapters.onebot.v11 import Bot, Message
 from nonebot.log import logger
 
 from .config import config
@@ -173,7 +172,8 @@ def get_forward_nodes(
 
     return nodes
 
-async def message_to_list(bot: Bot, msg: Message) -> list[dict[str, Any]]:
+
+async def dump_message(bot: Bot, msg: Message) -> list[dict[str, Any]]:
     res = []
     for seg in msg:
         if seg.type == "forward":
@@ -184,8 +184,17 @@ async def message_to_list(bot: Bot, msg: Message) -> list[dict[str, Any]]:
             forward_msgs = forward_data.get("messages", [])
             content = get_forward_nodes(forward_msgs, config.max_message_depth)
             seg.data["content"] = content
+        elif seg.type == "reply":
+            reply_id = seg.data.get("id")
+            if reply_id is None:
+                continue
+            reply_data = {}
+            reply_data = await bot.get_msg(message_id=reply_id)
+            content = reply_data.get("message", [])
+            seg.data["content"] = content
         res.append({"type": seg.type, "data": seg.data})
     return res
+
 
 _MSG_SCHEMA = [
     {
@@ -194,25 +203,138 @@ _MSG_SCHEMA = [
     }
 ]
 
-def get_multimedias_url(
-    msg: list[dict[str, Any]], depth: int, *, basetypes: list[str] = ["image", "video", "file"]
-) -> list[str]:
-    rax = []
-    if not validate_schema(msg, _MSG_SCHEMA):
-        return []
+B = TypeVar("B")
+
+
+def _msg_walk_children(seg: dict[str, Any]) -> list[dict[str, Any]] | None:
+    if seg["type"] in ("forward", "node", "reply"):
+        return seg["data"].get("content")
+    return None
+
+
+def msg_foldl(
+    func: Callable[[B, dict[str, Any]], B],
+    initial: B,
+    msg: list[dict[str, Any]],
+    depth: int,
+) -> B:
+    if not validate_schema(msg, _MSG_SCHEMA) or depth < 0:
+        return initial
     for seg in msg:
-        # base case
+        initial = func(initial, seg)
+        children = _msg_walk_children(seg)
+        if children is not None:
+            initial = msg_foldl(func, initial, children, depth - 1)
+    return initial
+
+
+def msg_foldr(
+    func: Callable[[dict[str, Any], B], B],
+    initial: B,
+    msg: list[dict[str, Any]],
+    depth: int,
+) -> B:
+    if not validate_schema(msg, _MSG_SCHEMA) or depth < 0:
+        return initial
+    for seg in reversed(msg):
+        children = _msg_walk_children(seg)
+        if children is not None:
+            initial = msg_foldr(func, initial, children, depth - 1)
+        initial = func(seg, initial)
+    return initial
+
+
+def msg_map(
+    func: Callable[[dict[str, Any]], dict[str, Any]],
+    msg: list[dict[str, Any]],
+    depth: int,
+) -> list[dict[str, Any]]:
+    if not validate_schema(msg, _MSG_SCHEMA) or depth < 0:
+        return msg
+    result: list[dict[str, Any]] = []
+    for seg in msg:
+        new_seg = func(seg)
+        children = _msg_walk_children(new_seg)
+        if children is not None:
+            new_seg = {"type": new_seg["type"], "data": dict(new_seg["data"])}
+            new_seg["data"]["content"] = msg_map(func, children, depth - 1)
+        result.append(new_seg)
+    return result
+
+
+def msg_filter(
+    func: Callable[[dict[str, Any]], bool], msg: list[dict[str, Any]], depth: int
+) -> list[dict[str, Any]]:
+    if not validate_schema(msg, _MSG_SCHEMA) or depth < 0:
+        return msg
+    result: list[dict[str, Any]] = []
+    for seg in msg:
+        if not func(seg):
+            continue
+        new_seg = seg
+        children = _msg_walk_children(seg)
+        if children is not None:
+            new_seg = {"type": seg["type"], "data": dict(seg["data"])}
+            new_seg["data"]["content"] = msg_filter(func, children, depth - 1)
+        result.append(new_seg)
+    return result
+
+
+def get_multimedias_url(
+    msg: list[dict[str, Any]],
+    depth: int,
+    *,
+    basetypes: list[str] = ["image", "video", "file"],
+) -> list[str]:
+    def _f(acc: list[str], seg: dict[str, Any]) -> list[str]:
         if seg["type"] in basetypes:
             url = seg["data"].get("url", "")
-            rax.append(url)
-            continue
+            acc.append(url)
+        return acc
 
-        if depth <= 0:
-            continue
+    return msg_foldl(_f, [], msg, depth)
 
-        if seg["type"] == "forward" or seg["type"] == "node":
-            msgs = seg["data"].get("content")
-            rax += get_multimedias_url(msgs, depth - 1, basetypes=basetypes)
-            continue
 
-    return rax
+class DataVarable:
+    def __init__(self, var_list: list | None):
+        self.vars = var_list
+
+
+def modify_msg_data(
+    msg: list[dict[str, Any]],
+    data: dict[str, Any],
+    basetypes: list[str],
+    depth: int,
+    *,
+    replace: bool = False,
+    cover: bool = True,
+) -> list[dict[str, Any]]:
+    def _map(seg: dict[str, Any]) -> dict[str, Any]:
+        if seg["type"] not in basetypes:
+            return seg
+        real_seg = {"type": seg["type"], "data": dict(seg["data"])}
+        real_data = data.copy()
+        for key, value in data.items():
+            if not isinstance(value, DataVarable):
+                continue
+            if value.vars is None:
+                real_data.pop(key, None)
+                real_seg["data"].pop(key, None)
+                continue
+            if value.vars == []:
+                return real_seg
+            real_data[key] = value.vars[0]
+            if len(value.vars) > 1:
+                value.vars.pop(0)
+        if replace:
+            real_seg["data"] = real_data
+            return real_seg
+        if cover:
+            real_seg["data"].update(real_data)
+            return real_seg
+        for key, value in real_data.items():
+            if key not in real_seg["data"]:
+                real_seg["data"][key] = value
+        return real_seg
+
+    return msg_map(_map, msg, depth)

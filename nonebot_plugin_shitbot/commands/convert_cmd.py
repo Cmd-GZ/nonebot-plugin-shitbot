@@ -10,7 +10,7 @@ import httpx
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
-from ..aux import message_to_list, get_multimedias_url, rm_cache, stuff_download
+from ..aux import dump_message, get_multimedias_url, rm_cache, stuff_download
 from ..command import BotCommand
 from ..config import config
 from ..parser import BotArgParser
@@ -305,7 +305,7 @@ class BotCommandConvert(BotCommand):
         async with self._prod_lock:
             if not self._if_accept_pic:
                 return
-            msg = await message_to_list(self.bot,event.get_message())
+            msg = await dump_message(self.bot, event.get_message())
             url_list = get_multimedias_url(
                 msg, config.max_message_depth, basetypes=["image"]
             )
