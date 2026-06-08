@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 
-from .aux import send_msg
+from .msgutils import send_msg
 from .parser import BotArgParser
 from .permissions import permissions
 
@@ -102,7 +102,7 @@ class BotCommand:
 
     async def send_msg(
         self,
-        msg: str | Message | list[dict[str, Any]],
+        msg: str | Message,
         *,
         group_id: str | None = None,
         user_id: str | None = None,

@@ -12,7 +12,7 @@ from nonebot.log import logger
 from ..aux import stuff_download
 from ..command import BotCommand
 from ..config import config
-from ..msgutils import DataVariables, dump_message, get_multimedias_url, modify_msg_data
+from ..msgutils import DataVariables, dump_message, get_multimedias_url, modify_msg_data, undump_message
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:
@@ -80,8 +80,8 @@ class BotCommandShitpost(BotCommand):
             return
         msg = event.get_message()
         async with self._prod_lock:
-            msg_dumpped = await dump_message(self.bot, msg)
-            urls = get_multimedias_url(msg_dumpped, config.max_message_depth)
+            dumped_msg = await dump_message(self.bot, msg)
+            urls = get_multimedias_url(dumped_msg)
             medias = []
             medias_path = []
             media_dir = (
@@ -102,25 +102,22 @@ class BotCommandShitpost(BotCommand):
                     medias_path.append(media_path)
                     medias.append(str(container_path))
 
-        msg_dumpped = modify_msg_data(
-            msg_dumpped,
+        dumped_msg = modify_msg_data(
+            dumped_msg,
             {
                 "file": DataVariables([f"file://{path}" for path in medias]),
                 "summary": "喵~",
             },
             ["image", "video", "file"],
-            config.max_message_depth,
             replace=True,
         )
-        if msg_dumpped == []:
-            return
-        if len(msg_dumpped) == 1 and msg_dumpped[0]["type"] == "forward":
-            msg = msg_dumpped[0]["data"].get("content")
-        else:
-            msg = Message(
-                MessageSegment(seg["type"], seg["data"]) for seg in msg_dumpped
-            )
+
+        msg = undump_message(dumped_msg)
         async with self._shitlock:
+            if not self._is_forwardable:
+                for path in medias_path:
+                    path.unlink()
+                return
             for group in self._groups:
                 await self.send_msg(msg, group_id=group)
             for path in medias_path:
@@ -177,6 +174,10 @@ class BotCommandShitpost(BotCommand):
 
         if subcmd == "stop":
             self._is_forwardable = False
+            async with self._prod_lock:
+                pass
+            async with self._shitlock:
+                pass
             await self.send_msg("豪赤，下回要搬的时候记得再叫我。")
             self.unlock()
             return

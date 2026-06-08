@@ -331,7 +331,7 @@ class BotCommandConvert(BotCommand):
                 return
             msg = await dump_message(self.bot, event.get_message())
             url_list = get_multimedias_url(
-                msg, config.max_message_depth, basetypes=["image"]
+                msg, basetypes=["image"]
             )
             for url in url_list:
                 await self._urls.put(url)

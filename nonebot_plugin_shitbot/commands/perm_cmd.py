@@ -163,7 +163,7 @@ class BotCommandPerm(BotCommand):
             ("群组权限组:\n", self._G, permissions.groups),
             ("权限项:\n", self._E, permissions.entries),
         ):
-            tip += title
+            tip += title if elems else ""
             for key in elems:
                 tip += f"{key}:\n{elemsdic.get(key, '未创建')}\n"
         await self.send_msg(tip)

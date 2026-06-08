@@ -1,4 +1,6 @@
-"""Unit tests for BotArgParser — no NoneBot initialization needed."""
+"""
+Unit tests for BotArgParser
+"""
 
 import pytest
 from nonebot_plugin_shitbot.parser import BotArgParser

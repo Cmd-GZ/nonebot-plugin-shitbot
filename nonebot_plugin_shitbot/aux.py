@@ -51,42 +51,6 @@ async def rm_cache(group_id: str, user_id: str, pid: str):
     logger.info(f"已删除缓存: {cache_path}")
 
 
-async def send_msg(
-    *,
-    bot: Bot,
-    group_id: int | None = None,
-    user_id: int | None = None,
-    msg: str | Message | list[dict[str, Any]] = "",
-):
-    if group_id is None and user_id is None:
-        logger.error("发送消息失败: group_id 和 user_id 不能同时为 None")
-        return None
-    if group_id is not None and user_id is not None:
-        logger.error("发送消息失败: group_id 和 user_id 不能同时不为 None")
-        return None
-
-    message_type = "group" if group_id is not None else "private"
-
-    try:
-        if isinstance(msg, list) and not isinstance(msg, Message):
-            return await bot.send_forward_msg(
-                message_type=message_type,
-                user_id=user_id,
-                group_id=group_id,
-                messages=msg,
-            )
-
-        return await bot.send_msg(
-            message_type=message_type,
-            user_id=user_id,
-            group_id=group_id,
-            message=msg,
-        )
-    except Exception as e:
-        logger.error(f"发送消息失败: {e}")
-        raise
-
-
 async def stuff_download(
     client: httpx.AsyncClient,
     url: str | httpx.URL,
