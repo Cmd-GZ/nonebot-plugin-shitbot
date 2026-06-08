@@ -10,9 +10,10 @@ import httpx
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
-from ..aux import dump_message, get_multimedias_url, rm_cache, stuff_download
+from ..aux import rm_cache, stuff_download
 from ..command import BotCommand
 from ..config import config
+from ..msgutils import dump_message, get_multimedias_url
 from ..parser import BotArgParser
 from ..tasks import EndOfQueue, prod_cons
 

@@ -11,7 +11,7 @@ class BotSession:
     _objs: dict[str, dict[str, BotSession]] = {}
     _sentinel = object()
 
-    # DON'T FUCKING CALL ME!
+    # Use make() instead of this
     def __init__(self, group_id: str, user_id: str, *, _internal=None):
         if _internal is not self._sentinel:
             raise TypeError("Please use BotSession.make() instead of BotSession()")

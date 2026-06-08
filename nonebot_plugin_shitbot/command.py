@@ -27,7 +27,7 @@ class BotCommand:
     _sentinel = object()
     _name = "otherwise"
 
-    # DON'T FUCKING CALL ME!
+    # Use make() instead of this
     def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         if _internal is not self._sentinel:
             raise TypeError("Please use BotCommand.make() instead of BotCommand()")

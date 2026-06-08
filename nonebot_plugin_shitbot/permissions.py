@@ -34,6 +34,7 @@ class BotPermissions:
 
     _DEFAULT_ENTRY_SCHEMA = [str, bool, [str], [str], bool, [str], [str], None]
 
+    # Use make() instead of this
     def __init__(self, *, _internal=None):
         if _internal is not self._sentinel:
             raise ValueError("请使用 BotPermissions.make() 方法创建实例")

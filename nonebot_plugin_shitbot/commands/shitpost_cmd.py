@@ -9,15 +9,10 @@ import httpx
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
-from ..aux import (
-    DataVarable,
-    dump_message,
-    get_multimedias_url,
-    modify_msg_data,
-    stuff_download,
-)
+from ..aux import stuff_download
 from ..command import BotCommand
 from ..config import config
+from ..msgutils import DataVariables, dump_message, get_multimedias_url, modify_msg_data
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:
@@ -87,7 +82,7 @@ class BotCommandShitpost(BotCommand):
         msg_dumpped = modify_msg_data(
             msg_dumpped,
             {
-                "file": DataVarable([f"file://{path}" for path in medias]),
+                "file": DataVariables([f"file://{path}" for path in medias]),
                 "summary": "喵~",
             },
             ["image", "video", "file"],
