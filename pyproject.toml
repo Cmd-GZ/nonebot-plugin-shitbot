@@ -18,6 +18,22 @@ dependencies = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nonebot_plugin_shitbot*"]
+
+[tool.setuptools.package-data]
+"nonebot_plugin_shitbot" = [
+    "scripts/*.sh",
+    "css/*.css",
+    "*.yaml",
+    "docs/**/*",
+]
+
 [tool.nonebot.plugins]
 nonebot-plugin-shitbot = ["nonebot_plugin_shitbot"]
 nonebot-plugin-htmlrender = ["nonebot_plugin_htmlrender"]
+
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"

@@ -1,4 +1,9 @@
 __pycache__/
 nonebot_plugin_shitbot/config.yaml
 .VSCodeCounter/
-nonebot_plugin_shitbot/docs/ignores/
+ignores/
+
+# build artifacts
+dist/
+*.egg-info/
+build/
