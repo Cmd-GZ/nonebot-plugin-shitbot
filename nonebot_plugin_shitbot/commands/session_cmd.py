@@ -37,13 +37,7 @@ class BotCommandSession(BotCommand):
                 self.unlock()
             return
 
-        if self._argv is not None:
-            command = self.session.commands.get(self._pid)
-            if not command:
-                return
-            tip = "错误：会话被占用\n"
-            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-            await self.send_msg(tip)
+        if not await self._guard_state():
             return
 
         self._argv = new_argv

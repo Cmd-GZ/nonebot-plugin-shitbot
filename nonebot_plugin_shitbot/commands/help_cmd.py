@@ -53,7 +53,6 @@ class BotCommandHelp(BotCommand):
             return
 
         help_dir = Path(__file__).resolve().parent.parent / "docs" / "help"
-        print(help_dir)
         tip = "错误: 帮助文档目录不存在"
         if help_dir.exists():
             tip = "错误: 帮助文档 index.md 不存在"

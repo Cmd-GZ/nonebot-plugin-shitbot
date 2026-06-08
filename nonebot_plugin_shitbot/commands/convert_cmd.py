@@ -52,6 +52,29 @@ class BotCommandConvert(BotCommand):
         parser.set_rule(max=0, need_subcmd=True)
         return parser
 
+    async def _guard_state(self, subcmd=None):
+        if subcmd is None:
+            return False
+        if self._argv is not None and subcmd == "start":
+            if (
+                self._session is None
+                or (command := self._session.commands.get(self._pid)) is None
+            ):
+                return False
+            tip = "错误：会话被占用\n"
+            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+            await self.send_msg(tip)
+            return False
+
+        if self._argv is None and subcmd == "stop":
+            tip = "错误：会话未开始\n"
+            tip += "你还没有开始收集图片，请先使用 /convert start 。"
+            await self.send_msg(tip)
+            self.unlock()
+            return False
+
+        return True
+
     @staticmethod
     async def _url_to_download(
         download_url: str, client: httpx.AsyncClient, download_dir: Path
@@ -327,20 +350,7 @@ class BotCommandConvert(BotCommand):
             self._parser.parse_argv(new_argv)
             subcmd = self._parser.subcmd
 
-            if self._argv is not None and subcmd == "start":
-                command = self.session.commands.get(self._pid)
-                if not command:
-                    return
-                tip = "错误：会话被占用\n"
-                tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-                await self.send_msg(tip)
-                return
-
-            if self._argv is None and subcmd == "stop":
-                tip = "错误：会话未开始\n"
-                tip += "你还没有开始收集图片，请先使用 /convert start 。"
-                await self.send_msg(tip)
-                self.unlock()
+            if not await self._guard_state(subcmd):
                 return
 
             self._argv = new_argv
@@ -353,7 +363,7 @@ class BotCommandConvert(BotCommand):
             if subcmd == "start":
                 new_mode = self._parser.subparsers[subcmd].opts_value.get(
                     "-m", ["video"]
-                )[0]  # type: ignore[index]
+                )[0]
                 self._mode = new_mode
                 await self._convert_start()
                 return

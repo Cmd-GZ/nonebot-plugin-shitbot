@@ -31,6 +31,9 @@ class BotCommandAutoreply(BotCommand):
                 self.unlock()
             return
 
+        if not await self._guard_state():
+            return
+
         self._argv = new_argv
         self._parser.parse_argv(self._argv)
         subcmd = self._parser.subcmd

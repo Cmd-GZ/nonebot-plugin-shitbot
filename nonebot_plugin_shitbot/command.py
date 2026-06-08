@@ -87,6 +87,19 @@ class BotCommand:
         await self._send_format_error()
         return False
 
+    async def _guard_state(self):
+        if self._argv is not None:
+            if (
+                self._session is None
+                or (command := self._session.commands.get(self._pid)) is None
+            ):
+                return False
+            tip = "错误：会话被占用\n"
+            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+            await self.send_msg(tip)
+            return False
+        return True
+
     async def send_msg(
         self,
         msg: str | Message | list[dict[str, Any]],

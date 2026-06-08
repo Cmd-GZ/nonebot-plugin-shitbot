@@ -50,6 +50,29 @@ class BotCommandShitpost(BotCommand):
         stop.set_rule(max=0)
         return parser
 
+    async def _guard_state(self, subcmd=None):
+        if subcmd is None:
+            return False
+        if self._argv is not None and subcmd == "start":
+            if (
+                self._session is None
+                or (command := self._session.commands.get(self._pid)) is None
+            ):
+                return False
+            tip = "错误：会话被占用\n"
+            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
+            await self.send_msg(tip)
+            return False
+
+        if self._argv is None and subcmd == "stop":
+            tip = "错误：会话未开始\n"
+            tip += "我还没吃上呢你着急啥，先输入 /shitpost start <群号1> <群号2> ... 开始搬石。"
+            await self.send_msg(tip)
+            self.unlock()
+            return False
+
+        return True
+
     async def roger(self, event: MessageEvent):
         if not self._is_forwardable:
             return
@@ -120,20 +143,7 @@ class BotCommandShitpost(BotCommand):
         self._parser.parse_argv(new_argv)
         subcmd = self._parser.subcmd
 
-        if self._argv is not None and subcmd == "start":
-            command = self.session.commands.get(self._pid)
-            if not command:
-                return
-            tip = "错误：会话被占用\n"
-            tip += f"命令 {command.name} 正在运行，进行下一步前请先终止它或等待其完成。"
-            await self.send_msg(tip)
-            return
-
-        if self._argv is None and subcmd == "stop":
-            tip = "错误：会话未开始"
-            tip += "我还没吃上呢你着急啥，先输入 /shitpost start <群号1> <群号2> ... 开始搬石。"
-            await self.send_msg(tip)
-            self.unlock()
+        if not await self._guard_state(subcmd):
             return
 
         self._argv = new_argv
