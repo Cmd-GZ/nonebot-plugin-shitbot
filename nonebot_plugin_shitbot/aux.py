@@ -127,11 +127,11 @@ def get_forward_nodes(
     if not forward_msgs:
         return []
     for forward_msg in forward_msgs:
-        if not forward_msg.get("sender"):
-            continue
-        if not forward_msg.get("message"):
-            continue
-        if not forward_msg["message"][0].get("type"):
+        if (
+            not forward_msg.get("sender")
+            or not forward_msg["sender"].get("message")
+            or not forward_msg["message"][0].get("type")
+        ):
             continue
         user_id = forward_msg["sender"].get("user_id", 0)
         nickname = forward_msg["sender"].get("nickname", None)
@@ -212,6 +212,10 @@ def _msg_walk_children(seg: dict[str, Any]) -> list[dict[str, Any]] | None:
     return None
 
 
+def _seg_copy(seg: dict[str, Any]) -> dict[str, Any]:
+    return {"type": seg["type"], "data": dict(seg["data"])}
+
+
 def msg_foldl(
     func: Callable[[B, dict[str, Any]], B],
     initial: B,
@@ -253,10 +257,10 @@ def msg_map(
         return msg
     result: list[dict[str, Any]] = []
     for seg in msg:
-        new_seg = func(seg)
+        new_seg = _seg_copy(seg)
+        new_seg = func(new_seg)
         children = _msg_walk_children(new_seg)
         if children is not None:
-            new_seg = {"type": new_seg["type"], "data": dict(new_seg["data"])}
             new_seg["data"]["content"] = msg_map(func, children, depth - 1)
         result.append(new_seg)
     return result
@@ -271,10 +275,9 @@ def msg_filter(
     for seg in msg:
         if not func(seg):
             continue
-        new_seg = seg
+        new_seg = _seg_copy(seg)
         children = _msg_walk_children(seg)
         if children is not None:
-            new_seg = {"type": seg["type"], "data": dict(seg["data"])}
             new_seg["data"]["content"] = msg_filter(func, children, depth - 1)
         result.append(new_seg)
     return result
