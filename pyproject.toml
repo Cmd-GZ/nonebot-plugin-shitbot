@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-shitbot"
-version = "0.1.0"
+version = "0.1.1"
 description = "NoneBot shitpost plugin"
 requires-python = ">=3.10"
 dependencies = [
