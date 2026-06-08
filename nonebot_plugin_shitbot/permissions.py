@@ -79,20 +79,7 @@ class BotPermissions:
         if config.owners is not None:
             self._users["owners"] = config.owners
 
-        default_entries_path = Path(__file__).parent / "defaults" / "entries.yaml"
-        default_entries = {}
-        try:
-            if default_entries_path.exists():
-                default_entries = yaml.safe_load(
-                    default_entries_path.read_text(encoding="utf-8")
-                )
-                if not isinstance(default_entries, dict):
-                    raise ValueError
-        except (yaml.YAMLError, ValueError):
-            raise ValueError(
-                f"默认权限文件 {default_entries_path} 内容不是合法的 YAML 字典"
-            )
-
+        default_entries = config.entries
         default_entries_keys = default_entries.keys()
         entries_keys = self._entries.keys()
         deleted_keys = []
@@ -109,15 +96,15 @@ class BotPermissions:
                     default_entries[key], self._DEFAULT_ENTRY_SCHEMA
                 ):
                     raise ValueError(
-                        f"默认权限文件 {default_entries_path} 中的条目 {key} 格式错误"
+                        f"条目 {key} 格式错误"
                     )
                 if key in self._entries:
                     continue
                 self._entries[key] = {"users": {}, "groups": {}}
                 self._init_entry(self._entries[key], default_entries[key])
                 is_inited = True
-        except KeyError:
-            raise ValueError(f"默认权限文件 {default_entries_path} 格式错误")
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError(f"项目配置文件中权限项声明项entries格式错误: {e}")
 
         if not is_inited:
             return
@@ -156,12 +143,13 @@ class BotPermissions:
             users = self._users.copy()
             owners = users.pop("owners", None)
             yaml.safe_dump(users, f, allow_unicode=True)
+
+            from ruamel.yaml import YAML
             config_path = Path(__file__).parent / "config.yaml"
-            with config_path.open("r", encoding="utf-8") as rf:
-                data = yaml.safe_load(rf)
+            config_yaml = YAML()
+            data = config_yaml.load(config_path)
             data["owners"] = owners
-            with config_path.open("w", encoding="utf-8") as wf:
-                yaml.safe_dump(data, wf, allow_unicode=True)
+            config_yaml.dump(data, config_path)
 
     def update_groups(self):
         with self._perm_groups_path.open("w", encoding="utf-8") as f:

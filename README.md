@@ -46,6 +46,20 @@
 
 - 暂时想到这些 哪天我又有什么点子也说不定
 
+## 配置
+
+插件启动时会自动从插件目录下的 `default_config.yaml` 复制默认配置到 `config.yaml`，
+之后编辑 `config.yaml` 即可。
+
+### 首次部署必填项
+
+| 配置项 | 类型 | 说明 |
+|---|---|---|
+| `bot_base` | 路径 | 插件的持久存储根目录（cache、data、config、权限数据等均存放于此） |
+| `client_base` | 路径 | 客户端侧的持久存储根目录（用于兼容容器部署） |
+| `owners` | 字符串列表 | 机器人所有者 QQ 号列表 |
+| `pixiv_access_token` | 字符串 | Pixiv API 访问令牌（可选填，使用 `/pixiv` 命令时必填） |
+
 ## 鸣谢
 
 - [ManyACG](https://manyacg.top): 为 /randpic ~~*以及下面的彩蛋*~~ 提供了API

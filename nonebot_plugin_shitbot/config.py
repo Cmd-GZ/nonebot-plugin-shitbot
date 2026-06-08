@@ -10,13 +10,15 @@ from pydantic import BaseModel, ConfigDict, model_validator
 class ShitBotConfig(BaseModel):
     bot_base: Path
     client_base: Path
+    plugin_base: Path = Path()
     config: Path = Path()
     cache: Path = Path()
     data: Path = Path()
     permissions: Path = Path()
-    script_png2v_path: Path
-    script_p2png_path: Path
-    script_png2fr_path: Path
+    script_png2v_path: Path = Path()
+    script_p2png_path: Path = Path()
+    script_png2fr_path: Path = Path()
+    entries: dict[str, list]
     owners: list[str] | None
     max_message_depth: int
     pixiv_access_token: str
@@ -30,9 +32,13 @@ class ShitBotConfig(BaseModel):
             bot_base = data.get("bot_base")
             if bot_base is not None:
                 bot_base = Path(bot_base)
+                data["plugin_base"] = Path(__file__).parent
                 data["config"] = bot_base / "config"
                 data["cache"] = bot_base / "cache"
                 data["data"] = bot_base / "data"
+                data["script_p2png_path"] = data["plugin_base"] / "scripts" / "p2png.sh"
+                data["script_png2v_path"] = data["plugin_base"] / "scripts" / "png2v.sh"
+                data["script_png2fr_path"] = data["plugin_base"] / "scripts" / "png2fr.sh"
                 data["permissions"] = data["config"] / "permissions"
         return data
 
@@ -53,6 +59,9 @@ _config: dict[str, ShitBotConfig | None] = {"instance": None}
 def get_config() -> ShitBotConfig:
     if _config["instance"] is None:
         config_path = Path(__file__).parent / "config.yaml"
+        if not config_path.exists():
+            default_config_path = Path(__file__).parent / "default_config.yaml"
+            default_config_path.copy(config_path)
         _config["instance"] = ShitBotConfig.from_yaml(config_path)
     return _config["instance"]
 

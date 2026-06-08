@@ -6,6 +6,7 @@ Pillow>=12.2.0
 httpx>=0.28.1
 pydantic>=2.13.4
 PyYAML>=6.0.3
+ruamel.yaml>=0.18.0
 
 # dev
 pytest>=9.0.3

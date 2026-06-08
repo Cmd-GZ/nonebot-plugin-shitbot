@@ -8,6 +8,7 @@ if not environ.get("PYTEST_RUNNING"):
     from nonebot.plugin import PluginMetadata
 
     from . import handlers  # noqa: F401
+    from .config import ShitBotConfig
 
     __plugin_meta__ = PluginMetadata(
         name="shitbot",
@@ -15,5 +16,6 @@ if not environ.get("PYTEST_RUNNING"):
         usage="发送/help 查看帮助信息",
         type="application",
         homepage="https://github.com/Cmd-GZ/nonebot-plugin-shitbot",
+        config=ShitBotConfig,
         supported_adapters={"~onebot.v11"},
     )
