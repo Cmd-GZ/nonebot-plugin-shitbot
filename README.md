@@ -51,14 +51,35 @@
 插件启动时会自动从插件目录下的 `default_config.yaml` 复制默认配置到 `config.yaml`，
 之后编辑 `config.yaml` 即可。
 
+### 安装
+
+```bash
+nb plugin install nonebot-plugin-shitbot
+```
+
 ### 首次部署必填项
 
 | 配置项 | 类型 | 说明 |
 |---|---|---|
-| `bot_base` | 路径 | 插件的持久存储根目录（cache、data、config、权限数据等均存放于此） |
+| `bot_base` | 路径 | 插件的持久存储根目录（cache / data / config / 均存放于此） |
 | `client_base` | 路径 | 客户端侧的持久存储根目录（用于兼容容器部署） |
 | `owners` | 字符串列表 | 机器人所有者 QQ 号列表 |
-| `pixiv_access_token` | 字符串 | Pixiv API 访问令牌（可选填，使用 `/pixiv` 命令时必填） |
+| `pixiv_access_token` | 字符串 | Pixiv API 访问令牌（可选填，使用 `/pixiv` 时必填） |
+
+### 触发规则
+
+| 命令 | 说明 |
+|---|---|
+| `/session` | 会话管理 |
+| `/perm` | 权限管理 |
+| `/help` | 查看帮助 |
+| `/randpic` | 随机二次元图片 |
+| `/advrandpic` | 高级随机图片 |
+| `/pixiv` | P站图片检索 |
+| `/convert` | 图片格式转换 |
+| `/shitpost` | 搬史 |
+| `/md2pic` | Markdown 渲染为图片 |
+| `/autoreply` | 自动回复管理 |
 
 ## 鸣谢
 
