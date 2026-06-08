@@ -330,9 +330,7 @@ class BotCommandConvert(BotCommand):
             if not self._if_accept_pic:
                 return
             msg = await dump_message(self.bot, event.get_message())
-            url_list = get_multimedias_url(
-                msg, basetypes=["image"]
-            )
+            url_list = get_multimedias_url(msg, basetypes=["image"])
             for url in url_list:
                 await self._urls.put(url)
 

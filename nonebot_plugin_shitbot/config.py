@@ -12,9 +12,10 @@ from pydantic import BaseModel
 # ShitBotConfig is declared in PluginMetadata.config so that NoneFlow
 # can introspect the plugin's configuration schema.
 
+
 class ShitBotConfig(BaseModel):
-    bot_base: Path          # persistent storage root (cache / data / config live here)
-    client_base: Path       # client-side persistent storage root (for container deploys)
+    bot_base: Path  # persistent storage root (cache / data / config live here)
+    client_base: Path  # client-side persistent storage root (for container deploys)
     entries: dict[str, list]  # permission entries for each command
     owners: list[str] | None = None
     max_message_depth: int = 10
@@ -38,6 +39,7 @@ class ShitBotConfig(BaseModel):
 #   and are always available (no NoneBot dependency).
 # - Storage paths (cache / data / config / permissions) lazily require localstore
 #   on first access.
+
 
 class Config:
     def __init__(self, user_config: ShitBotConfig):
@@ -118,8 +120,10 @@ class Config:
         if self._store is None:
             _inject_localstore_env(self._uc.bot_base)
             from nonebot import require
+
             require("nonebot_plugin_localstore")
             import nonebot_plugin_localstore as store
+
             self._store = store
         return self._store
 
@@ -135,9 +139,10 @@ def get_config() -> Config:
         config_path = Path(__file__).parent / "config.yaml"
         if not config_path.exists():
             default_config_path = Path(__file__).parent / "default_config.yaml"
-            with open(default_config_path, encoding="utf-8") as src, open(
-                config_path, "w", encoding="utf-8"
-            ) as dst:
+            with (
+                open(default_config_path, encoding="utf-8") as src,
+                open(config_path, "w", encoding="utf-8") as dst,
+            ):
                 dst.write(src.read())
         _config = Config(ShitBotConfig.from_yaml(config_path))
     return _config

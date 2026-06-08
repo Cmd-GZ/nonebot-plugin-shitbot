@@ -95,9 +95,7 @@ class BotPermissions:
                 if len(default_entries[key]) < 7 or not validate_schema(
                     default_entries[key], self._DEFAULT_ENTRY_SCHEMA
                 ):
-                    raise ValueError(
-                        f"条目 {key} 格式错误"
-                    )
+                    raise ValueError(f"条目 {key} 格式错误")
                 if key in self._entries:
                     continue
                 self._entries[key] = {"users": {}, "groups": {}}
@@ -145,6 +143,7 @@ class BotPermissions:
             yaml.safe_dump(users, f, allow_unicode=True)
 
             from ruamel.yaml import YAML
+
             config_path = Path(__file__).parent / "config.yaml"
             config_yaml = YAML()
             data = config_yaml.load(config_path)

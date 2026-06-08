@@ -86,7 +86,8 @@ def _set_node(
 
 
 def _get_forward_nodes(
-    forward_msgs: DumpedMsg, *, depth: int=config.max_message_depth) -> DumpedMsg:
+    forward_msgs: DumpedMsg, *, depth: int = config.max_message_depth
+) -> DumpedMsg:
     """
     Get the node list of a forward-type message
     """
@@ -110,7 +111,9 @@ def _get_forward_nodes(
             if depth <= 0:
                 continue
             seg = forward_msg.get("message", [])[0]
-            content = _get_forward_nodes(seg["data"].get("content", []), depth = depth - 1)
+            content = _get_forward_nodes(
+                seg["data"].get("content", []), depth=depth - 1
+            )
             node = _set_node(user_id=user_id, nickname=nickname, content=content)
             nodes.append(node)
             continue
@@ -122,7 +125,7 @@ def _get_forward_nodes(
             if depth <= 0:
                 continue
             inner_content = _get_forward_nodes(
-                seg["data"].get("content", []), depth = depth - 1
+                seg["data"].get("content", []), depth=depth - 1
             )
             inner_node = _set_node(
                 user_id=user_id, nickname=nickname, content=inner_content
@@ -167,6 +170,7 @@ async def dump_message(bot: Bot, msg: Message) -> DumpedMsg:
         res.append({"type": seg.type, "data": seg.data})
     return res
 
+
 def undump_message(dumped_msg: DumpedMsg) -> Message:
     """
     Convert DumpedMsg to Message
@@ -174,7 +178,11 @@ def undump_message(dumped_msg: DumpedMsg) -> Message:
     """
     if not validate_schema(dumped_msg, _MSG_SCHEMA):
         return Message()
-    return Message(MessageSegment(dumped_seg["type"], dumped_seg["data"]) for dumped_seg in dumped_msg)
+    return Message(
+        MessageSegment(dumped_seg["type"], dumped_seg["data"])
+        for dumped_seg in dumped_msg
+    )
+
 
 async def send_msg(
     *,
@@ -245,7 +253,7 @@ def msg_foldl(
     initial: B,
     msg: DumpedMsg,
     *,
-    depth: int=config.max_message_depth,
+    depth: int = config.max_message_depth,
 ) -> B:
     """
     A functional combinator of DumpedMsg to fold it to a single value from left to right
@@ -263,7 +271,7 @@ def msg_foldl(
         initial = func(initial, seg)
         children = _msg_walk_children(seg)
         if children is not None:
-            initial = msg_foldl(func, initial, children, depth = depth - 1)
+            initial = msg_foldl(func, initial, children, depth=depth - 1)
     return initial
 
 
@@ -272,7 +280,7 @@ def msg_foldr(
     initial: B,
     msg: DumpedMsg,
     *,
-    depth: int=config.max_message_depth,
+    depth: int = config.max_message_depth,
 ) -> B:
     """
     A functional combinator of DumpedMsg to fold it to a single value from right to left
@@ -289,7 +297,7 @@ def msg_foldr(
     for seg in reversed(msg):
         children = _msg_walk_children(seg)
         if children is not None:
-            initial = msg_foldr(func, initial, children, depth = depth - 1)
+            initial = msg_foldr(func, initial, children, depth=depth - 1)
         initial = func(seg, initial)
     return initial
 
@@ -298,7 +306,7 @@ def msg_map(
     func: Callable[[DumpedSeg], DumpedSeg],
     msg: DumpedMsg,
     *,
-    depth: int=config.max_message_depth,
+    depth: int = config.max_message_depth,
 ) -> DumpedMsg:
     """
     A functional combinator of DumpedMsg to map it to get a new DumpedMsg
@@ -317,13 +325,16 @@ def msg_map(
         new_seg = func(new_seg)
         children = _msg_walk_children(new_seg)
         if children is not None:
-            new_seg["data"]["content"] = msg_map(func, children, depth = depth - 1)
+            new_seg["data"]["content"] = msg_map(func, children, depth=depth - 1)
         result.append(new_seg)
     return result
 
 
 def msg_filter(
-    func: Callable[[DumpedSeg], bool], msg: DumpedMsg, *, depth: int=config.max_message_depth
+    func: Callable[[DumpedSeg], bool],
+    msg: DumpedMsg,
+    *,
+    depth: int = config.max_message_depth,
 ) -> DumpedMsg:
     """
     A functional combinator of DumpedMsg to filter it to get a new DumpedMsg
@@ -343,7 +354,7 @@ def msg_filter(
         new_seg = _seg_copy(seg)
         children = _msg_walk_children(seg)
         if children is not None:
-            new_seg["data"]["content"] = msg_filter(func, children, depth = depth - 1)
+            new_seg["data"]["content"] = msg_filter(func, children, depth=depth - 1)
         result.append(new_seg)
     return result
 

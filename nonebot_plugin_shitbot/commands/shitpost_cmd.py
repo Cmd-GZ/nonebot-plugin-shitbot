@@ -6,13 +6,19 @@ import uuid
 from typing import TYPE_CHECKING
 
 import httpx
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 from nonebot.log import logger
 
 from ..aux import stuff_download
 from ..command import BotCommand
 from ..config import config
-from ..msgutils import DataVariables, dump_message, get_multimedias_url, modify_msg_data, undump_message
+from ..msgutils import (
+    DataVariables,
+    dump_message,
+    get_multimedias_url,
+    modify_msg_data,
+    undump_message,
+)
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:

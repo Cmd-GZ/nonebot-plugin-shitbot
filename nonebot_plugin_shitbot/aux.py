@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from nonebot.adapters.onebot.v11 import Bot, Message
 from nonebot.log import logger
 
 from .config import config
