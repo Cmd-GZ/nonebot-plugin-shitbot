@@ -1,6 +1,6 @@
 """
 # msgutils
-Some utils to handle `Message` and `MessageSegment` by convert them to `DumpedMsg` and `DumpedSeg`
+Some utils to handle `Message` and `MessageSegment` by converting them to `DumpedMsg` and `DumpedSeg`
 ## DumpedMsg and DumpedSeg
 Both of them are alias as follow:
 ```python
@@ -31,7 +31,7 @@ data TypeNode = Node ... DumpedMsg
 So the utils handle them functionally
 ## Functions
 - `dump_message`: convert `Message` to `DumpedMsg`
-- `msg_foldl`, `msg_foldr`, `msg_map`, `msg_filter`: functional combinator of DumpedMsg
+- `msg_foldl`, `msg_foldr`, `msg_map`, `msg_filter`: functional combinators of DumpedMsg
 - `get_multimedias_url`: get the urls of multimedias
 - `modify_msg_data`: modify the datas of `DumpedMsg`
 """
@@ -61,8 +61,6 @@ ORIGIN = object()
 
 class DataVariables:
     def __init__(self, var_list: list):
-        if var_list == []:
-            raise ValueError("var_list cannot be empty")
         self.vars = var_list
         self.index = 0
 
@@ -397,7 +395,8 @@ def modify_msg_data(
             - Set `data={..., key: value,...}` to assign all `key` with `value` in `msg`
             - Set `data={...,key: ORIGIN,...}` to assign all `key` with the original value of corresponding `key` in `msg` if it exists
             - Set `data={...,key: DELETE,...}` to delete all `key` in `msg`
-            - Set `data={...,key: DataVariables(<non-empty list>),...}` will assign the i-th `key` in `msg` with the i-th element of the list
+            - Set `data={...,key: DataVariables(vat_list),...}` will assign the i-th `key` in `msg` with the i-th element of `vat_list`
+                - if `vat_list` is empty, it wont't assign anything
                 - if i is out of range, it will assign `key` with the last element
                 - call `<DataVariables Object>.reset()` to reset it if you want to use it in the function again
         - `basetypes`: the types of the data that will be modified
@@ -422,12 +421,13 @@ def modify_msg_data(
                 continue
             if not isinstance(value, DataVariables):
                 continue
+            if value.vars == []:
+                continue
             real_data[key] = (
                 value.vars[value.index]
-                if value.index < len(value.vars)
-                else value.vars[-1]
             )
             value.index += 1
+            value.index = min(value.index, len(value.vars) - 1)
         if replace:
             seg["data"] = real_data
             return seg
