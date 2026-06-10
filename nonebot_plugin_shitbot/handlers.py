@@ -94,7 +94,10 @@ async def startup():
 @driver.on_bot_connect
 async def bot_connect(bot: Bot):
     session = BotSession.make("public", "autoreply")
-    BotCommandAutoReplyMain.make(bot, session, _pid=session.curpid)
+    autoreply_main = BotCommandAutoReplyMain.make(bot, session, _pid=session.curpid)
+    if autoreply_main is None:
+        return
+    await autoreply_main.run(Message())
 
 
 @driver.on_shutdown

@@ -1,3 +1,4 @@
+import hashlib
 import shutil
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,20 @@ async def rm_cache(group_id: str, user_id: str, pid: str):
     cache_path = config.cache / group_id / user_id / pid
     await rm_path(cache_path)
     logger.info(f"已删除缓存: {cache_path}")
+
+
+def rename_file_to_sha256(file_path: Path | str):
+    file = Path(file_path) if isinstance(file_path, str) else file_path
+    if not file.is_file():
+        raise FileNotFoundError(f"No such file or not a regular file: {file}")
+    # Compute sha256sum
+    with file.open("rb") as f:
+        hash_hex = hashlib.file_digest(f, "sha256").hexdigest()
+    # Rename
+    new_name = hash_hex
+    new_path = file.with_name(new_name)
+    file.rename(new_path)
+    return new_path
 
 
 async def stuff_download(

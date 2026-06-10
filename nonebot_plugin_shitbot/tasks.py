@@ -4,6 +4,8 @@ import asyncio
 from collections.abc import Coroutine
 from typing import Callable
 
+autoreply_lock = asyncio.Lock()
+
 
 class EndOfQueue:
     pass

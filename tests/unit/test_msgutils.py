@@ -2,8 +2,6 @@
 Unit tests for the pure logical part of msgutils
 """
 
-
-
 from nonebot_plugin_shitbot.msgutils import (
     DumpedSeg,
     get_multimedias_url,

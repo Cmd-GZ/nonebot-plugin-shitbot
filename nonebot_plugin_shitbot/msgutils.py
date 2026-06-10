@@ -9,7 +9,7 @@ DumpedSeg = dict[str, Any]
 ```python
 with the following schema:
 ```python
-_MSG_SCHEMA = [
+MSG_SCHEMA = [
     {
         "type": str,
         "data": dict,
@@ -44,7 +44,7 @@ from nonebot.log import logger
 from .aux import validate_schema
 from .config import config
 
-_MSG_SCHEMA = [
+MSG_SCHEMA = [
     {
         "type": str,
         "data": dict,
@@ -174,7 +174,7 @@ def undump_message(dumped_msg: DumpedMsg) -> Message:
     Convert DumpedMsg to Message
         - dumped_msg: the dumped message
     """
-    if not validate_schema(dumped_msg, _MSG_SCHEMA):
+    if not validate_schema(dumped_msg, MSG_SCHEMA):
         return Message()
     return Message(
         MessageSegment(dumped_seg["type"], dumped_seg["data"])
@@ -263,7 +263,7 @@ def msg_foldl(
         - `initial`: the initial value
         - `depth`: the max depth of recursion
     """
-    if not validate_schema(msg, _MSG_SCHEMA) or depth < 0:
+    if not validate_schema(msg, MSG_SCHEMA) or depth < 0:
         return initial
     for seg in msg:
         initial = func(initial, seg)
@@ -290,7 +290,7 @@ def msg_foldr(
         - `initial`: the initial value
         - `depth`: the max depth of recursion
     """
-    if not validate_schema(msg, _MSG_SCHEMA) or depth < 0:
+    if not validate_schema(msg, MSG_SCHEMA) or depth < 0:
         return initial
     for seg in reversed(msg):
         children = _msg_walk_children(seg)
@@ -315,7 +315,7 @@ def msg_map(
             - **ATTENTION**: `func` shoudl not have any side effect to `msg`
         - `depth`: the max depth of recursion
     """
-    if not validate_schema(msg, _MSG_SCHEMA) or depth < 0:
+    if not validate_schema(msg, MSG_SCHEMA) or depth < 0:
         return msg
     result: DumpedMsg = []
     for seg in msg:
@@ -343,7 +343,7 @@ def msg_filter(
             - **ATTENTION**: `func` shoudl not have any side effect to `msg`
         - `depth`: the max depth of recursion
     """
-    if not validate_schema(msg, _MSG_SCHEMA) or depth < 0:
+    if not validate_schema(msg, MSG_SCHEMA) or depth < 0:
         return msg
     result: DumpedMsg = []
     for seg in msg:
@@ -423,9 +423,7 @@ def modify_msg_data(
                 continue
             if value.vars == []:
                 continue
-            real_data[key] = (
-                value.vars[value.index]
-            )
+            real_data[key] = value.vars[value.index]
             value.index += 1
             value.index = min(value.index, len(value.vars) - 1)
         if replace:
