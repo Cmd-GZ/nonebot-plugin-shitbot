@@ -26,7 +26,7 @@ from ..session import BotSession
 from ..tasks import EndOfQueue, autoreply_lock, prod_cons
 from .autoreply_main_cmd import BotCommandAutoReplyMain
 
-
+# Will be reconstructed after I implement the database
 class BotCommandAutoreply(BotCommand):
     _name = "autoreply"
     _autoreply_dir = BotCommandAutoReplyMain._autoreply_dir

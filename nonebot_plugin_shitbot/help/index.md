@@ -13,6 +13,7 @@
 | `/pixiv` | 根据Pixiv ID从P站获取图片 |
 | `/shitpost` | 将消息转发到多个群聊（默认仅私聊） |
 | `/md2pic` | 将 markdown 文本转换为图片输出 |
+| `/autoreply` | 自动回复系统管理 |
 
 ## 示例
 

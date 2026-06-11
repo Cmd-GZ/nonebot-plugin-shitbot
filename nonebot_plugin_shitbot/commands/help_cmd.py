@@ -31,6 +31,7 @@ class BotCommandHelp(BotCommand):
         parser.add_subparser("advrandpic")
         parser.add_subparser("md2pic")
         parser.add_subparser("pixiv")
+        parser.add_subparser("autoreply")
         return parser
 
     async def run(self, args: Message):
@@ -52,7 +53,7 @@ class BotCommandHelp(BotCommand):
             self.unlock()
             return
 
-        help_dir = Path(__file__).resolve().parent.parent / "docs" / "help"
+        help_dir = Path(__file__).resolve().parent.parent / "help"
         tip = "错误: 帮助文档目录不存在"
         if help_dir.exists():
             tip = "错误: 帮助文档 index.md 不存在"
@@ -69,6 +70,7 @@ class BotCommandHelp(BotCommand):
             "advrandpic",
             "md2pic",
             "pixiv",
+            "autoreply",
         ):
             tip = f"错误: 帮助文档 {subcmd}.md 不存在"
             help_path = help_dir / f"{subcmd}.md"
