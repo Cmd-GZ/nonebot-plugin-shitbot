@@ -360,7 +360,7 @@ def msg_filter(
 def get_multimedias_url(
     msg: DumpedMsg,
     *,
-    basetypes: list[str] = ["image", "video", "file"],
+    basetypes: list[str] = ["image", "video", "file", "record"],
     depth: int = config.max_message_depth,
 ) -> list[str]:
     """

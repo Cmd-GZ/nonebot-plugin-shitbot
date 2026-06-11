@@ -51,6 +51,15 @@ async def rm_cache(group_id: str, user_id: str, pid: str):
     logger.info(f"已删除缓存: {cache_path}")
 
 
+def get_file_sha256(file_path: Path | str):
+    file = Path(file_path) if isinstance(file_path, str) else file_path
+    if not file.is_file():
+        raise FileNotFoundError(f"No such file or not a regular file: {file}")
+    # Compute sha256sum
+    with file.open("rb") as f:
+        hash_hex = hashlib.file_digest(f, "sha256").hexdigest()
+    return hash_hex
+
 def rename_file_to_sha256(file_path: Path | str):
     file = Path(file_path) if isinstance(file_path, str) else file_path
     if not file.is_file():
