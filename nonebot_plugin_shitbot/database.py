@@ -1,13 +1,24 @@
-import httpx
-import yaml
 import uuid
 from pathlib import Path
 
+import httpx
+import yaml
 from nonebot.adapters.onebot.v11 import Message
 
-from .aux import get_file_sha256, validate_schema, stuff_download
-from .msgutils import MSG_SCHEMA, DELETE, DataVariables, DumpedMsg, DumpedSeg, msg_foldl, msg_map, get_multimedias_url, modify_msg_data, undump_message
+from .aux import get_file_sha256, stuff_download, validate_schema
 from .config import config
+from .msgutils import (
+    DELETE,
+    MSG_SCHEMA,
+    DataVariables,
+    DumpedMsg,
+    DumpedSeg,
+    get_multimedias_url,
+    modify_msg_data,
+    msg_foldl,
+    msg_map,
+    undump_message,
+)
 
 
 def _normalize_seg(seg: DumpedSeg) -> DumpedSeg:
@@ -91,7 +102,6 @@ def _normalize_seg(seg: DumpedSeg) -> DumpedSeg:
 
 
 class BotDataBase:
-
     def __init__(self, db_dir: Path):
         self._dir = db_dir
         self._medias_dir = self._dir / "medias"
@@ -182,7 +192,9 @@ class BotDataBase:
         self._msgs_rc[sha256] = rc - 1
         self._update_rc()
 
-    async def _normalize_msg(self, msg: DumpedMsg, *, save_media: bool = False) -> tuple[list[str], str, DumpedMsg]:
+    async def _normalize_msg(
+        self, msg: DumpedMsg, *, save_media: bool = False
+    ) -> tuple[list[str], str, DumpedMsg]:
         if not validate_schema(msg, MSG_SCHEMA):
             raise ValueError("Invalid message")
 
@@ -204,8 +216,14 @@ class BotDataBase:
                     self._save_media(temp_path)
                 temp_path.unlink(missing_ok=True)
 
-        storable = modify_msg_data(msg, {"url": DELETE, "file": DataVariables(medias)}, ["image", "video", "file", "record"])
-        msg = modify_msg_data(storable, {"summary": DELETE, "sub_type": DELETE}, ["image"])
+        storable = modify_msg_data(
+            msg,
+            {"url": DELETE, "file": DataVariables(medias)},
+            ["image", "video", "file", "record"],
+        )
+        msg = modify_msg_data(
+            storable, {"summary": DELETE, "sub_type": DELETE}, ["image"]
+        )
         msg = modify_msg_data(msg, {"user_id": DELETE, "nickname": DELETE}, ["node"])
 
         msg_temp_dir = self._cache_dir / "msg"
@@ -222,11 +240,11 @@ class BotDataBase:
             return name
         return None
 
-    async def save_msg(self, msg: DumpedMsg):
+    async def save_msg(self, msg: DumpedMsg, *, cover: bool = True) -> Path:
         medias, name, storable = await self._normalize_msg(msg, save_media=True)
 
         msg_path = self._msgs_dir / name
-        if msg_path.exists():
+        if msg_path.exists() and not cover:
             return msg_path
 
         for media in medias:
@@ -245,12 +263,14 @@ class BotDataBase:
             return
 
         msg = yaml.safe_load(msg_path.read_text(encoding="utf-8"))
+
         def _f(acc: list[str], seg: DumpedSeg) -> list[str]:
             if seg["type"] in ["image", "video", "file", "record"]:
                 url = seg["data"].get("file")
                 if url is not None:
                     acc.append(url)
             return acc
+
         medias = msg_foldl(_f, [], msg)
         for media in medias:
             self._dec_media_rc(media)
@@ -261,12 +281,16 @@ class BotDataBase:
 
     def prepare_send_msg(self, sha256: str) -> Message:
         msg = self.get_msg(sha256)
-        contain_medias_dir = config.client_base / self._medias_dir.relative_to(config.client_base)
+        contain_medias_dir = config.client_base / self._medias_dir.relative_to(
+            config.client_base
+        )
+
         def _map(seg: DumpedSeg) -> DumpedSeg:
             if seg["type"] == "image":
                 seg["data"]["file"] = (
-                    f"file://{str(contain_medias_dir / seg['data']['file'])}"
+                    f"file://{contain_medias_dir / seg['data']['file']!s}"
                 )
             return seg
+
         msg = msg_map(_map, msg)
         return undump_message(msg)

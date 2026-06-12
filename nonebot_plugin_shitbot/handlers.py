@@ -6,11 +6,10 @@ from nonebot.log import logger
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
-from .aux import (
-    rm_path,
-)
+from .aux import rm_path
 from .commands import *
 from .config import config
+from .msgutils import get_reply
 from .session import BotSession
 
 
@@ -59,6 +58,9 @@ async def cmd_handler(
         tip += f"命令 {scmd.name} 正在运行，进行下一步前请先终止它或等待其完成。"
         await matcher.finish(tip)
 
+    reply = get_reply(event)
+    if reply is not None:
+        args = Message([reply]) + args
     await scmd.run(args)
     await matcher.finish()
 

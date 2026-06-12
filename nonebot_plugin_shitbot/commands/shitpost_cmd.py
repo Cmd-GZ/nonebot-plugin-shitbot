@@ -15,6 +15,7 @@ from ..config import config
 from ..msgutils import (
     DataVariables,
     dump_message,
+    get_message_with_reply,
     get_multimedias_url,
     modify_msg_data,
     undump_message,
@@ -84,7 +85,7 @@ class BotCommandShitpost(BotCommand):
             return
         if self.session is None:
             return
-        msg = event.get_message()
+        msg = get_message_with_reply(event)
         async with self._prod_lock:
             dumped_msg = await dump_message(self.bot, msg)
             urls = get_multimedias_url(dumped_msg)

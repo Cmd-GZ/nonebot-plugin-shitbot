@@ -60,6 +60,7 @@ def get_file_sha256(file_path: Path | str):
         hash_hex = hashlib.file_digest(f, "sha256").hexdigest()
     return hash_hex
 
+
 def rename_file_to_sha256(file_path: Path | str):
     file = Path(file_path) if isinstance(file_path, str) else file_path
     if not file.is_file():

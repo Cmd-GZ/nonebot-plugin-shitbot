@@ -38,7 +38,7 @@ So the utils handle them functionally
 
 from typing import Any, Callable, TypeVar
 
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
 from .aux import validate_schema
@@ -135,7 +135,61 @@ def _get_forward_nodes(
     return nodes
 
 
-async def dump_message(bot: Bot, msg: Message) -> DumpedMsg:
+def get_reply(event: MessageEvent) -> MessageSegment | None:
+    if event.reply is None:
+        return None
+    return MessageSegment.reply(event.reply.message_id)
+
+
+def get_message_with_reply(event: MessageEvent) -> Message:
+    msg = event.message
+    reply = get_reply(event)
+    if reply is not None:
+        msg = Message([reply]) + event.message
+    return msg
+
+
+async def _parse_dumped_msg(
+    bot: Bot, msg: DumpedMsg, *, depth: int = config.max_message_depth
+) -> DumpedMsg:
+    async def _map(seg: DumpedSeg) -> DumpedSeg:
+        msg_id = seg.get("data", {}).get("id")
+        if msg_id is None or seg["data"].get("content") is not None:
+            return seg
+        if seg["type"] == "forward":
+            try:
+                forward_data = await bot.get_forward_msg(id=msg_id)
+                forward_msgs: DumpedMsg = forward_data.get("messages", [])
+            except Exception:
+                forward_msgs = []
+            seg["data"]["content"] = _get_forward_nodes(forward_msgs)
+        if seg["type"] == "reply":
+            try:
+                reply_data = await bot.get_msg(message_id=msg_id)
+                reply_msg = reply_data.get("message", [])
+            except Exception:
+                reply_msg = []
+            seg["data"]["content"] = reply_msg
+        return seg
+
+    if depth < 0:
+        return msg
+    result: DumpedMsg = []
+    for seg in msg:
+        new_seg = _seg_copy(seg)
+        new_seg = await _map(new_seg)
+        children = _msg_walk_children(new_seg)
+        if children is not None:
+            new_seg["data"]["content"] = await _parse_dumped_msg(
+                bot, children, depth=depth - 1
+            )
+        result.append(new_seg)
+    return result
+
+
+async def dump_message(
+    bot: Bot, msg: Message, *, depth: int = config.max_message_depth
+) -> DumpedMsg:
     """
     Convert Message to DumpedMsg
         - bot: the bot instance
@@ -149,23 +203,8 @@ async def dump_message(bot: Bot, msg: Message) -> DumpedMsg:
     """
     res = []
     for seg in msg:
-        if seg.type == "forward":
-            msg_id = seg.data.get("id")
-            if msg_id is None:
-                continue
-            forward_data = await bot.get_forward_msg(id=msg_id)
-            forward_msgs: DumpedMsg = forward_data.get("messages", [])
-            content: DumpedMsg = _get_forward_nodes(forward_msgs)
-            seg.data["content"] = content
-        elif seg.type == "reply":
-            reply_id = seg.data.get("id")
-            if reply_id is None:
-                continue
-            reply_data = {}
-            reply_data = await bot.get_msg(message_id=reply_id)
-            content: DumpedMsg = reply_data.get("message", [])
-            seg.data["content"] = content
         res.append({"type": seg.type, "data": seg.data})
+    res = await _parse_dumped_msg(bot, res, depth=depth)
     return res
 
 

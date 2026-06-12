@@ -13,7 +13,7 @@ from nonebot.log import logger
 from ..aux import rm_cache, stuff_download
 from ..command import BotCommand
 from ..config import config
-from ..msgutils import dump_message, get_multimedias_url
+from ..msgutils import dump_message, get_message_with_reply, get_multimedias_url
 from ..parser import BotArgParser
 from ..tasks import EndOfQueue, prod_cons
 
@@ -329,7 +329,7 @@ class BotCommandConvert(BotCommand):
         async with self._prod_lock:
             if not self._if_accept_pic:
                 return
-            msg = await dump_message(self.bot, event.get_message())
+            msg = await dump_message(self.bot, get_message_with_reply(event))
             url_list = get_multimedias_url(msg, basetypes=["image"])
             for url in url_list:
                 await self._urls.put(url)
