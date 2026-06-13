@@ -1,11 +1,12 @@
-bot_base: /
-client_base: /
-max_message_depth: 10
-owners: []
-pixiv_access_token: ""
+bot_base: / # bot存储根目录
+client_base: / # 客户端侧存储根目录
+max_message_depth: 16 # 消息解析最大递归深度
+if_auto_start_autoreply: True # 是否自动启动自动回复
+owners: [] # Owners用户权限组成员，成员拥有 /perm 命令的所有权限
+pixiv_access_token: "" # Pixiv API 访问令牌
 
 
-entries:
+entries: # 权限项及其默认设置
   # entryname: [description, users.is_white, users.whites, users.blacks, groups.is_white, groups.whites, groups.blacks]
   randpic: ["是否允许使用randpic命令", False, [], ["banned"], True, ["setu"], ["banned"]]
   advrandpic: ["是否允许使用advrandpic命令", False, [], ["banned"], True, ["setu"], ["banned"]]

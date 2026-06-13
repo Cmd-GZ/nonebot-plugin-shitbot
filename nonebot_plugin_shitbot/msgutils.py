@@ -461,6 +461,7 @@ def modify_msg_data(
             if not isinstance(value, DataVariables):
                 continue
             if value.vars == []:
+                real_data.pop(key, None)
                 continue
             real_data[key] = value.vars[value.index]
             value.index += 1

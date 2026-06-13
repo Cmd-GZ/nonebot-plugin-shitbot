@@ -95,6 +95,8 @@ async def startup():
 
 @driver.on_bot_connect
 async def bot_connect(bot: Bot):
+    if not config.if_auto_start_autoreply:
+        return
     session = BotSession.make("public", "autoreply")
     autoreply_main = BotCommandAutoReplyMain.make(bot, session, _pid=session.curpid)
     if autoreply_main is None:

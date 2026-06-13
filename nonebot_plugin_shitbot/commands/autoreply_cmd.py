@@ -1,191 +1,223 @@
-from __future__ import annotations
-
 import asyncio
-import uuid
+import yaml
+
 from pathlib import Path
 
-import httpx
-import yaml
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
-from nonebot.log import logger
 
-from ..aux import rename_file_to_sha256, rm_cache, stuff_download
 from ..command import BotCommand
-from ..config import config
-from ..msgutils import (
-    DataVariables,
-    DumpedMsg,
-    DumpedSeg,
-    dump_message,
-    get_multimedias_url,
-    modify_msg_data,
-    msg_filter,
-)
-from ..parser import BotArgParser
 from ..session import BotSession
-from ..tasks import EndOfQueue, autoreply_lock, prod_cons
+from ..parser import BotArgParser
+from ..msgdatabase import BotMsgDataBase
+from ..msgutils import DumpedMsg, DumpedSeg, DataVariables, dump_message, msg_filter, modify_msg_data
+from ..tasks import autoreply_lock
 from .autoreply_main_cmd import BotCommandAutoReplyMain
 
 
-# Will be reconstructed after I implement the database
 class BotCommandAutoreply(BotCommand):
     _name = "autoreply"
     _autoreply_dir = BotCommandAutoReplyMain._autoreply_dir
     _rule_path = BotCommandAutoReplyMain._rule_path
-    _msg_dir = BotCommandAutoReplyMain._msg_dir
-    _image_dir = BotCommandAutoReplyMain._image_dir
+    _msg_table_path = BotCommandAutoReplyMain._msg_table_path
 
     def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         super().__init__(bot, session, _pid=_pid, _internal=_internal)
-        self._k: list[str] = []
-        self._v: list[str] = []
-        self._vstate: str = ""
-        self._l: int = 1
-        self._sum: list[str] = []
-        self._st: list[int] = []
-        self._d: list[str] = []
-        self._tm: list[str] = []
-        self._m: str = "equal"
-
-        self._prod_lock = asyncio.Lock()
-        self._cons_lock = asyncio.Lock()
-        self._is_accept_pic = False
-        self._urls = asyncio.Queue()
-        self._downloads = asyncio.Queue()
-        self._pics = asyncio.Queue()
-
+        self._roger_lock = asyncio.Lock()
+        self._is_accept_msg = False
         self._rule = {}
+        self._msg_table = {}
         self._temp_msg: DumpedMsg = []
 
-    async def _guard_state(self, new_argv=None):
-        if new_argv is None:
-            return False
-        # If new_argv is not value --start or not value --stop, handle it as normal
-        self._parser.parse_argv(new_argv)
-        subcmd = self._parser.subcmd
-        if subcmd != "value":
-            return await super()._guard_state()
-        subparser = self._parser.subparsers[subcmd]
-        is_stop = subparser.opts_value["--stop"][0]
-        is_start = subparser.opts_value["--start"][0] if not is_stop else 0
-        if not is_start and not is_stop:
-            return await super()._guard_state()
+        self._auto: bool = False
+        self._key: list[str] = []
+        self._rp: list[str] = []
+        self._T: list[str] = []
+        self._t: list[str] = []
+        self._K: list[str] = []
+        self._k: list[str] = []
+        self._R: list[str] = []
+        self._r: list[str] = []
+        self._m: int = -1
+        self._l: int = 0
+        self._sum: list[str] = []
+        self._st: list[int] = []
 
-        # Handle the case where new_argv is value --start
-        if self._argv is not None and is_start:
-            return await super()._guard_state()
-        if self._argv is None and is_start:
-            return True
+        self._rstate: str = ""
 
-        # Handle the case where new_argv is value --stop and self._argv is None
-        if self._argv is None and is_stop:
-            tip = "错误：会话未开始\n"
-            tip += "尚未开始收集自动信息，请先使用 /autoreply value --start 开始收集。"
-            await self.send_msg(tip)
-            self.unlock()
-            return False
-        if self._argv is None:
-            return False
+    def _load_meta(self):
+        if not self._rule_path.exists() or not self._msg_table_path.exists():
+            raise FileNotFoundError
+        _rule = yaml.safe_load(self._rule_path.read_text(encoding="utf-8"))
+        _msg_table = yaml.safe_load(self._msg_table_path.read_text(encoding="utf-8"))
+        if (_rule is not None and not isinstance(_rule, dict)) or (
+            _msg_table is not None and not isinstance(_msg_table, dict)
+        ):
+            raise ValueError
+        self._rule = _rule if _rule is not None else {}
+        self._msg_table = _msg_table if _msg_table is not None else {}
 
-        # Now handle the case where new_argv is value --stop and self._argv is not None
-        if self._vstate != "start":
-            return await super()._guard_state()
-        return True
+    def _update_meta(self):
+        self._rule_path.write_text(
+            yaml.safe_dump(self._rule, allow_unicode=True), encoding="utf-8"
+        )
+        self._msg_table_path.write_text(
+            yaml.safe_dump(self._msg_table, allow_unicode=True), encoding="utf-8"
+        )
+        arsession = BotSession.get_obj("public", "autoreply")
+        if arsession is None:
+            return
+        main_command = arsession.commands.get(arsession.curpid)
+        if main_command is None or not isinstance(
+            main_command, BotCommandAutoReplyMain
+        ):
+            return
+        main_command.load_meta()
+
+    async def _set_reply(self, reply: str):
+        old_msg_hash = self._msg_table.get(reply, "")
+        if self._temp_msg == []:
+            if old_msg_hash:
+                return
+            self._msg_table[reply] = ""
+            self._update_meta()
+            return
+
+        def _filter(seg: DumpedSeg) -> bool:
+            return seg["type"] in ["text", "image", "face"]
+
+        filtered_msg = msg_filter(_filter, self._temp_msg)
+        msg_path = await self._database.save_msg(filtered_msg)
+        msg_hash = msg_path.name
+        self._msg_table[reply] = msg_hash
+        self._database.inc_msg_rc(msg_hash)
+        if old_msg_hash:
+            self._database.dec_msg_rc(old_msg_hash)
+            self._database.del_msg(old_msg_hash)
+        self._update_meta()
+
+    def _del_reply(self, reply: str):
+        for key in self._rule.keys():
+            if reply in self._rule[key]["replys"]:
+                self._rule[key]["replys"].remove(reply)
+        msg_hash = self._msg_table.get(reply, "")
+        if not msg_hash:
+            self._msg_table.pop(reply, None)
+            self._update_meta()
+            return
+        self._database.dec_msg_rc(msg_hash)
+        self._database.del_msg(msg_hash)
+        self._msg_table.pop(reply, None)
+        self._update_meta()
+
+    def _set_key(
+        self,
+        key: str,
+        *,
+        trans: list[str] | None = None,
+        dels: list[str] | None = None,
+        is_contain: bool | None = None,
+        keywords: list[str] | None = None,
+        replys: list[str] | None = None,
+    ):
+        if key not in self._rule:
+            self._rule[key] = {
+                "trans": [],
+                "dels": [],
+                "is_contain": False,
+                "keywords": [],
+                "replys": [],
+            }
+        if trans is not None:
+            self._rule[key]["trans"] = trans
+        if dels is not None:
+            self._rule[key]["dels"] = dels
+        if is_contain is not None:
+            self._rule[key]["is_contain"] = is_contain
+        if keywords is not None:
+            self._rule[key]["keywords"] = keywords
+        if replys is not None:
+            self._rule[key]["replys"] = replys
+        self._update_meta()
+
+    def _del_key(self, key: str):
+        self._rule.pop(key, None)
+        self._update_meta()
 
     def _init_parser(self):
         parser = BotArgParser()
         parser.set_rule(max=0, need_subcmd=True)
-
         start = parser.add_subparser("start")
-        start.set_rule(max=0)
-
         stop = parser.add_subparser("stop")
-        stop.set_rule(max=0)
-
+        lst = parser.add_subparser("list")
+        info = parser.add_subparser("info")
+        prnt = parser.add_subparser("print")
         create = parser.add_subparser("create")
-        create.set_rule(max=0)
-        create.add_opt("-k", required=True, max_appeared=None)
-        create.add_opt("-v", required=True, max_appeared=None)
-
         delete = parser.add_subparser("delete")
-        delete.set_rule(max=0)
-        delete.add_opt("-k", required=True, max_appeared=None)
-        delete.add_opt("-v", required=True, max_appeared=None)
-
-        value = parser.add_subparser("value")
-        value.set_rule(min=1, max=1)
-        value.add_opt("--stop", default=[0])
-        value.add_opt("--start", default=[0])
-        value.add_opt("-l", required=True, type=int, default=[1])
-        value.add_opt("--sum", required=True, max_appeared=None)
-        value.add_opt("--st", required=True, type=int, max_appeared=None)
-
+        reply = parser.add_subparser("reply")
         key = parser.add_subparser("key")
-        key.set_rule(min=1, max=1)
-        key.add_opt(
-            "--tm",
-            required=True,
-            choice=["delspace", "delmarks", "uppercase", "lowercase"],
-            max_appeared=None,
-            default=[],
-        )
-        key.add_opt("-d", required=True, max_appeared=None, default=[])
-        key.add_opt("-m", required=True, choice=["equal", "contain"], default=["equal"])
-        key.add_opt("-v", required=True, max_appeared=None, default=[])
+
+        start.set_rule(max=0)
+        start.add_opt("--auto", default=[0])
+
+        stop.set_rule(max=0)
+        stop.add_opt("--auto", default=[0])
+
+        lst.set_rule(min=1,max=1)
+
+        info.set_rule(max=None)
+
+        prnt.set_rule(max=None)
+
+        create.set_rule(max=0)
+        create.add_opt("--key", required=True, max_appeared=None)
+        create.add_opt("--rp", required=True, max_appeared=None)
+
+        delete.set_rule(max=0)
+        delete.add_opt("--key", required=True, max_appeared=None)
+        delete.add_opt("--rp", required=True, max_appeared=None)
+
+        reply.set_rule(min=1,max=1, need_subcmd=True)
+        reply_start = reply.add_subparser("start")
+        reply_stop = reply.add_subparser("stop")
+        reply_modify = reply.add_subparser("modify")
+
+        key.set_rule(min=1,max=1)
+        key.add_opt("-T", required=True, choice=["delmark", "delspace", "upper", "lower"], max_appeared=None)
+        key.add_opt("-t", required=True, choice=["delmark", "delspace", "upper", "lower"], max_appeared=None)
+        key.add_opt("-D", required=True, max_appeared=None)
+        key.add_opt("-d", required=True, max_appeared=None)
+        key.add_opt("-K", required=True, max_appeared=None)
+        key.add_opt("-k", required=True, max_appeared=None)
+        key.add_opt("-R", required=True, max_appeared=None)
+        key.add_opt("-r", required=True, max_appeared=None)
+        key.add_opt("-m", required=True, choice=["equal", "contain"], default=[""])
+
+        reply_start.set_rule(max=0)
+        reply_start.add_opt("-l", required=True, type=int, default=[1])
+
+        reply_stop.set_rule(max=0)
+
+        reply_modify.set_rule(max=0)
+        reply_modify.add_opt("--sum", required=True, max_appeared=None)
+        reply_modify.add_opt("--st", required=True, type=int, max_appeared=None)
 
         return parser
 
-    @staticmethod
-    def _invert(flag: bool, exp: bool):
-        if flag:
-            return not exp
-        return exp
-
-    def _load_rule(self):
-        _rule = yaml.safe_load(self._rule_path.read_text(encoding="utf-8"))
-        if _rule is not None and not isinstance(_rule, dict):
-            raise ValueError
-        self._rule = _rule if _rule is not None else {}
-
-    def _update_rule(self):
-        with self._rule_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(self._rule, f, allow_unicode=True)
-            arsession = BotSession.get_obj("public", "autoreply")
-            if arsession is None:
-                return
-            main_command = arsession.commands.get(arsession.curpid)
-            if main_command is None or not isinstance(
-                main_command, BotCommandAutoReplyMain
-            ):
-                return
-            main_command.load_rule()
-
-    @staticmethod
-    async def _url_to_download(
-        download_url: str, client: httpx.AsyncClient, download_dir: Path
-    ):
-        try:
-            filename = f"{uuid.uuid4().hex}"
-            save_path = download_dir / filename
-            await stuff_download(client, download_url, save_path)
-            logger.info(f"下载图片成功: {save_path}")
-            return str(save_path)
-        except Exception as e:
-            logger.error(f"下载图片失败 {download_url}: {e}")
-            return ""
-
-    @staticmethod
-    async def _download_to_pic(download_path: str, pic_dir: Path):
-        if download_path == "":
-            return ""
-
-        rename_path = rename_file_to_sha256(download_path)
-        pic_path = pic_dir / rename_path.name
-        async with autoreply_lock:
-            if not pic_path.exists():
-                rename_path.rename(pic_path)
-        return str(pic_path)
-
+    async def _guard_state(self, subsubcmd=None):
+        if subsubcmd is None:
+            return await super()._guard_state()
+        if subsubcmd == "start" and self._argv is not None:
+            return await super()._guard_state()
+        if subsubcmd == "stop" and self._argv is None:
+            tip = "错误：会话未开始\n"
+            tip += "尚未开始收集自动信息，请先使用 /autoreply value start 开始收集。"
+            await self.send_msg(tip)
+            self.unlock()
+            return False
+        if subsubcmd == "stop" and self._rstate != "start":
+            return await super()._guard_state()
+        return True
+        
     async def _start(self):
         autoreply_session = BotSession.make("public", "autoreply")
         main_command = BotCommandAutoReplyMain.make(
@@ -193,6 +225,15 @@ class BotCommandAutoreply(BotCommand):
         )
         if main_command is None:
             await self.send_msg("警告: 自动回复正在运行中")
+        else:
+            await main_command.run(Message())
+        if self._auto:
+            from ruamel.yaml import YAML
+            config_path = Path(__file__).parent.parent / "config.yaml"
+            config_yaml = YAML()
+            data = config_yaml.load(config_path)
+            data["if_auto_start_autoreply"] = True
+            config_yaml.dump(data, config_path)
         await self.send_msg("自动回复已开启")
         self.unlock()
 
@@ -209,213 +250,218 @@ class BotCommandAutoreply(BotCommand):
             main_command.unlock()
 
         await _exe()
+        if self._auto:
+            from ruamel.yaml import YAML
+            config_path = Path(__file__).parent.parent / "config.yaml"
+            config_yaml = YAML()
+            data = config_yaml.load(config_path)
+            data["if_auto_start_autoreply"] = False
+            config_yaml.dump(data, config_path)
         await self.send_msg("自动回复已关闭")
         self.unlock()
 
-    async def _create_delete(self, mode):
-        if mode not in ["create", "delete"]:
-            return
-
-        verb = "创建" if mode == "create" else "删除"
-        flag = not mode == "create"
-        ptcl = "已" if mode == "create" else "不"
-
-        def _op1(flag: bool, dic: dict, key: str):
-            if flag:
-                return dic.pop(key)
-            dic[key] = [[], [], False, []]
-
-        def _op2(flag: bool, path: Path):
-            if flag:
-                return path.unlink()
-            path.touch(exist_ok=True)
-
-        async with autoreply_lock:
-            self._load_rule()
-            is_edited = False
-            for key in self._k:
-                if self._invert(flag, key in self._rule):
-                    await self.send_msg(f"警告: {key} {ptcl}存在")
-                    continue
-                _op1(flag, self._rule, key)
-                is_edited = True
-            if is_edited:
-                self._update_rule()
-            for value in self._v:
-                value_path = self._msg_dir / f"{value}.yaml"
-                if self._invert(flag, value_path.exists()):
-                    await self.send_msg(f"警告: {value} {ptcl}存在")
-                    continue
-                _op2(flag, value_path)
-            await self.send_msg(f"{verb}成功")
-            self.unlock()
-
-    async def _value_start(self, value_name: str):
-        if self._session is None:
-            return
-        value_path = self._msg_dir / f"{value_name}.yaml"
-        if not value_path.exists():
-            await self.send_msg(f"错误: {value_name} 不存在")
-            self.unlock()
-            return
-        downloads_dir = (
-            config.cache
-            / self._session.group_id
-            / self._session.user_id
-            / str(self._pid)
-            / "autoreply"
-        )
-        downloads_dir.mkdir(parents=True, exist_ok=True)
-
-        async def _urls_to_downloads():
-            try:
-                async with httpx.AsyncClient() as client:
-                    await prod_cons(
-                        self._urls,
-                        self._downloads,
-                        self._url_to_download,
-                        client,
-                        downloads_dir,
-                    )
-            except Exception as e:
-                logger.exception(f"urls_to_downloads 管道异常退出: {e}")
-
-        async def _downloads_to_pics():
-            try:
-                async with self._cons_lock:
-                    await prod_cons(
-                        self._downloads,
-                        self._pics,
-                        self._download_to_pic,
-                        self._image_dir,
-                    )
-            except Exception as e:
-                logger.exception(f"downloads_to_pics 管道异常退出: {e}")
-
-        asyncio.create_task(_urls_to_downloads())
-        asyncio.create_task(_downloads_to_pics())
-
-        logger.info(f"用户 {self._session.user_id} 开始为 {value_name} 设置具体信息")
-        await self.send_msg(
-            f"请发送仅包含图片或文字的信息, 或者发送 /autoreply value --stop {value_name} 停止设置"
-        )
-
-        self._is_accept_pic = True
-        self._value_name = value_name
-        return
-
-    async def _value_stop(self, value_name: str):
-        if not self.session:
-            return
-        self._is_accept_pic = False
-
-        async with self._prod_lock:
-            await self._urls.put(EndOfQueue())
-        async with self._cons_lock:
-            pass
-
-        pics = []
-        while True:
-            pic = await self._pics.get()
-            if isinstance(pic, EndOfQueue):
-                break
-            pics.append(pic)
-
-        self._temp_msg = modify_msg_data(
-            self._temp_msg,
-            {
-                "file": DataVariables([f"{Path(path).name}" for path in pics]),
-                "summary": DataVariables(self._sum),
-                "sub_type": DataVariables(self._st),
-            },
-            ["image"],
-            replace=True,
-        )
-        if self._temp_msg == []:
-            await self.send_msg("错误: 未受到任何信息")
-            await rm_cache(self.session.group_id, self.session.user_id, str(self._pid))
-            self.unlock()
-            return
-        async with autoreply_lock:
-            value_path = self._msg_dir / f"{value_name}.yaml"
-            value_path.write_text(yaml.safe_dump(self._temp_msg))
-
-        await self.send_msg("设置成功")
-        await rm_cache(self.session.group_id, self.session.user_id, str(self._pid))
+    async def _list(self, tpe: str):
+        lst = []
+        if tpe == "key":
+            lst = self._rule.keys()
+        if tpe == "reply":
+            lst = self._msg_table.keys()
+        await self.send_msg("\n".join(lst))
         self.unlock()
-        return
 
-    async def _value_modify(self, value_name: str):
-        if not self.session:
+    async def _info(self, keys: list[str]):
+        tip = ""
+        for key in keys:
+            tip += f"{key}: {self._rule[key] if key in self._rule else '未创建'}\n"
+
+        await self.send_msg(tip)
+        self.unlock()
+
+    async def _print(self, replys: list[str]):
+        for reply in replys:
+            await self.send_msg(f"{reply} 内容:")
+            if reply not in self._msg_table:
+                await self.send_msg(f"警告: {reply} 未被创建")
+                continue
+            if self._msg_table[reply] == "":
+                await self.send_msg(f"警告: {reply} 未被设置")
+                continue
+            msg_hash = self._msg_table[reply]
+            async with autoreply_lock:
+                msg = self._database.prepare_send_msg(msg_hash)
+            try:
+                await self.send_msg(msg)
+            except Exception as e:
+                await self.send_msg(f"警告: {reply} 发送失败: {e}")
+
+        self.unlock()
+
+    async def _create(self):
+        async with autoreply_lock:
+            for key in self._key:
+                if key in self._rule:
+                    await self.send_msg(f"警告: 键 {key} 已存在")
+                    continue
+                self._set_key(key)
+            for reply in self._rp:
+                if reply in self._msg_table:
+                    await self.send_msg(f"警告: 回复 {reply} 已存在")
+                    continue
+                await self._set_reply(reply)
+            await self.send_msg("创建成功")
+
+        self.unlock()
+
+    async def _delete(self):
+        async with autoreply_lock:
+            for key in self._key:
+                if key not in self._rule:
+                    await self.send_msg(f"警告: 键 {key} 不存在")
+                    continue
+                self._del_key(key)
+            for reply in self._rp:
+                if reply not in self._msg_table:
+                    await self.send_msg(f"警告: 回复 {reply} 不存在")
+                    continue
+                self._del_reply(reply)
+            await self.send_msg("删除成功")
+
+        self.unlock()
+
+    async def _reply_start(self, reply_name: str):
+        if reply_name not in self._msg_table:
+            await self.send_msg(f"警告: 回复信息 {reply_name} 不存在")
             return
-        value_path = self._msg_dir / f"{value_name}.yaml"
-        if not value_path.exists():
-            await self.send_msg(f"错误: {value_name} 不存在")
+        self._rstate = "start"
+        self._reply_name = reply_name
+        await self.send_msg(f"请发送仅包含图片或文字的信息, 或者发送 /autoreply reply {reply_name} stop 停止设置")
+        self._is_accept_msg = True
+
+    async def _reply_stop(self, reply_name: str):
+        if reply_name not in self._msg_table:
+            await self.send_msg(f"警告: 回复信息 {reply_name} 不存在")
+            return
+        self._rstate = "stop"
+        self._is_accept_msg = False
+        async with self._roger_lock:
+            if not self._temp_msg:
+                await self.send_msg("错误: 未收到任何信息")
+                self.unlock()
+                return
+            async with autoreply_lock:
+                await self._set_reply(reply_name)
+                self._temp_msg = []
+            await self.send_msg("设置成功")
             self.unlock()
+
+    async def _reply_modify(self, reply_name: str):
+        reply_hash = self._msg_table.get(reply_name, "")
+        if reply_hash == "":
+            await self.send_msg(f"警告: 回复信息 {reply_name} 不存在或未设置")
             return
         async with autoreply_lock:
-            self._temp_msg = yaml.safe_load(value_path.read_text(encoding="utf-8"))
+            self._temp_msg = self._database.get_msg(reply_hash)
+            if not self._temp_msg:
+                await self.send_msg("错误: 未收到任何信息")
+                self.unlock()
+                return
             self._temp_msg = modify_msg_data(
                 self._temp_msg,
                 {
                     "summary": DataVariables(self._sum),
                     "sub_type": DataVariables(self._st),
                 },
-                ["image"],
-                replace=False,
+                ["image"]
             )
-            value_path.write_text(yaml.safe_dump(self._temp_msg))
+            await self._set_reply(reply_name)
+            self._temp_msg = []
         await self.send_msg("修改成功")
         self.unlock()
 
-    async def _key(self, key_name: str):
-        if not self.session:
-            return
-        key = key_name
-        async with autoreply_lock:
-            self._load_rule()
-            if key not in self._rule:
-                await self.send_msg(f"错误: {key} 不存在")
-                self.unlock()
-                return
-            self._rule[key][0] = self._tm[:]
-            self._rule[key][1] = self._d[:]
-            self._rule[key][2] = self._m == "contain"
-            self._rule[key][3] = self._v[:]
-            self._update_rule()
-            await self.send_msg("设置成功")
+    async def _key_modify(self, key_name: str):
+        if key_name not in self._rule:
+            await self.send_msg(f"错误: 键 {key_name} 不存在")
             self.unlock()
+            return
+        def _rm_dup(lst_A: list, lst_R: list):
+            dup = []
+            for elem in lst_A:
+                if elem in lst_R:
+                    dup.append(elem)
+            for elem in dup:
+                lst_A.remove(elem)
+                lst_R.remove(elem)
+            return dup
+
+        def _get_lst(lst_S, lst_A, lst_R):
+            lst = lst_S[:]
+            for elem in lst_A:
+                if elem not in lst_R:
+                    lst.append(elem)
+            for elem in lst_R:
+                if elem in lst_S:
+                    lst.remove(elem)
+            return lst
+
+        for (lst_A, lst_R) in [(self._T, self._t), (self._D, self._d), (self._K, self._k), (self._R, self._r)]:
+            _rm_dup(lst_A, lst_R)
+        for lst in [self._R, self._r]:
+            rem = []
+            for elem in lst:
+                if self._msg_table.get(elem, "") == "":
+                    await self.send_msg(f"警告: 回复信息 {elem} 不存在或未设置")
+                    rem.append(elem)
+            for elem in rem:
+                lst.remove(elem)
+        data = []
+        for (lst_S, lst_A, lst_R) in [(self._rule[key_name]["trans"], self._T, self._t), (self._rule[key_name]["dels"], self._D, self._d), (self._rule[key_name]["keywords"], self._K, self._k), (self._rule[key_name]["replys"], self._R, self._r)]:
+            data.append(_get_lst(lst_S, lst_A, lst_R))
+                
+
+        _m = None
+        if self._m == 0:
+            _m = False
+        elif self._m == 1:
+            _m = True
+
+        async with autoreply_lock:
+            self._set_key(
+                key_name,
+                trans=data[0],
+                dels=data[1],
+                is_contain=_m,
+                keywords=data[2],
+                replys=data[3]
+            )
+        await self.send_msg("修改成功")
+        self.unlock()
+
+
 
     async def roger(self, event: MessageEvent):
-        async with self._prod_lock:
-            if not self._is_accept_pic:
+        async with self._roger_lock:
+            if not self._is_accept_msg:
                 return
             if self._l <= 0:
                 return
-            msg = await dump_message(self.bot, event.get_message())
-
-            def _filter(seg: DumpedSeg) -> bool:
-                if seg["type"] != "text" and seg["type"] != "image":
-                    return False
-                if seg["type"] == "text" and seg["data"].get("text") is None:
-                    return False
-                if seg["type"] == "image" and seg["data"].get("url") is None:
-                    return False
-                return True
-
-            msg = msg_filter(_filter, msg)
-            url_list = get_multimedias_url(msg, basetypes=["image"])
-            for url in url_list:
-                await self._urls.put(url)
-            self._temp_msg.extend(msg)
+            dumped_msg = await dump_message(self.bot, event.message)
+            self._temp_msg.extend(dumped_msg)
             self._l -= 1
             if self._l <= 0:
-                value_name = getattr(self, "_value_name", None)
-                if value_name is None:
+                reply_name = getattr(self, "_reply_name", None)
+                if reply_name is None:
                     raise ValueError
-                asyncio.create_task(self.run(Message(f"value --stop {value_name}")))
+                asyncio.create_task(self.run(Message(f"reply {reply_name} stop")))
+
+
 
     async def run(self, args: Message):
+        async with autoreply_lock:
+            self._database = BotMsgDataBase(self._autoreply_dir)
+            self._rule_path.touch(exist_ok=True)
+            self._msg_table_path.touch(exist_ok=True)
+            self._load_meta()
+
         if not self.session:
             return
         new_argv = args.extract_plain_text().strip().split()
@@ -424,15 +470,16 @@ class BotCommandAutoreply(BotCommand):
             if self._argv is None:
                 self.unlock()
             return
-
-        if not await self._guard_state(new_argv):
-            return
-
-        self._argv = new_argv
-        self._parser.parse_argv(self._argv)
+        subsubcmd = None
+        self._parser.parse_argv(new_argv)
         subcmd = self._parser.subcmd
         if subcmd is None:
             self.unlock()
+            return
+        subparser = self._parser.subparsers[subcmd]
+        subsubcmd = subparser.subcmd
+
+        if not await self._guard_state(subsubcmd):
             return
 
         if not self._check_perm("autoreplymanager"):
@@ -440,48 +487,64 @@ class BotCommandAutoreply(BotCommand):
             self.unlock()
             return
 
-        subparser = self._parser.subparsers[subcmd]
-        self._k = subparser.opts_value.get("-k", [])
-        self._v = subparser.opts_value.get("-v", [])
-        if subparser.opts_value.get("--start", [0])[0]:
-            self._vstate = "start"
-        if subparser.opts_value.get("--stop", [0])[0]:
-            self._vstate = "stop"
-        _sum = subparser.opts_value.get("--sum", [])
-        _st = subparser.opts_value.get("--st", [])
-        if _sum or self._vstate != "stop":
-            self._sum = _sum
-        if _st or self._vstate != "stop":
-            self._st = _st
-        self._l = subparser.opts_value.get("-l", [1])[0]
+        self._argv = new_argv
+
+        _auto = subparser.opts_value.get("--auto", [0])[0]
+        self._auto = _auto >= 1
+
+        self._key = subparser.opts_value.get("--key", [])
+        self._rp = subparser.opts_value.get("--rp", [])
+
+        self._T = subparser.opts_value.get("-T", [])
+        self._t = subparser.opts_value.get("-t", [])
+        self._D = subparser.opts_value.get("-D", [])
         self._d = subparser.opts_value.get("-d", [])
-        self._tm = subparser.opts_value.get("--tm", [])
-        self._m = subparser.opts_value.get("-m", ["equal"])[0]
+        self._K = subparser.opts_value.get("-K", [])
+        self._k = subparser.opts_value.get("-k", [])
+        self._R = subparser.opts_value.get("-R", [])
+        self._r = subparser.opts_value.get("-r", [])
+        _ms = subparser.opts_value.get("-m", [""])
+        if _ms[0] == "equal":
+            self._m = 0
+        if _ms[0] == "contain":
+            self._m = 1
+
+        if subsubcmd is not None:
+            subsubparser = subparser.subparsers[subsubcmd]
+            self._l = subsubparser.opts_value.get("-l", [1])[0]
+            self._l = max(1, self._l)
+            self._sum = subsubparser.opts_value.get("--sum", [])
+            self._st = subsubparser.opts_value.get("--st", [])
+            self._rstate = subsubcmd if subsubcmd != "modify" else ""
+
 
         if subcmd == "start":
             await self._start()
-            return
-
         if subcmd == "stop":
             await self._stop()
-            return
-
-        if subcmd in ["create", "delete"]:
-            await self._create_delete(subcmd)
-            return
-
-        if subcmd == "value":
-            value_name = subparser.value[0]
-            if self._vstate == "start":
-                await self._value_start(value_name)
-                return
-            if self._vstate == "stop":
-                await self._value_stop(value_name)
-                return
-            await self._value_modify(value_name)
-            return
-
+        if subcmd == "list":
+            lst = subparser.value[0]
+            await self._list(lst)
+        if subcmd == "info":
+            await self._info(subparser.value)
+        if subcmd == "print":
+            await self._print(subparser.value)
+        if subcmd == "create":
+            await self._create()
+        if subcmd == "delete":
+            await self._delete()
+        reply_name = ""
+        if subcmd == "reply":
+            reply_name = subparser.value[0]
+        if subsubcmd == "start":
+            await self._reply_start(reply_name)
+        if subsubcmd == "stop":
+            await self._reply_stop(reply_name)
+        if subsubcmd == "modify":
+            await self._reply_modify(reply_name)
         if subcmd == "key":
             key_name = subparser.value[0]
-            await self._key(key_name)
-            return
+            await self._key_modify(key_name)
+
+
+

@@ -19,6 +19,7 @@ class ShitBotConfig(BaseModel):
     entries: dict[str, list]  # permission entries for each command
     owners: list[str] | None = None
     max_message_depth: int = 10
+    if_auto_start_autoreply: bool = True
     pixiv_access_token: str = ""
 
     @classmethod
@@ -68,6 +69,10 @@ class Config:
     @property
     def max_message_depth(self) -> int:
         return self._uc.max_message_depth
+
+    @property
+    def if_auto_start_autoreply(self) -> bool:
+        return self._uc.if_auto_start_autoreply
 
     @property
     def pixiv_access_token(self) -> str:

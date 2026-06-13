@@ -136,6 +136,7 @@ class BotCommandShitpost(BotCommand):
             await asyncio.sleep(rand)
 
     async def run(self, args: Message):
+        random.seed()
         if not self.session:
             return
         new_argv = args.extract_plain_text().strip().split()
