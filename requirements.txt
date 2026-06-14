@@ -4,6 +4,7 @@ nonebot-plugin-htmlrender>=0.6.7
 PixivPy-Async>=1.2.14
 Pillow>=12.2.0
 httpx>=0.28.1
+python-magic>=0.4.27
 pydantic>=2.13.4
 PyYAML>=6.0.3
 ruamel.yaml>=0.18.0

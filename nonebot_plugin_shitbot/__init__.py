@@ -5,10 +5,14 @@ from os import environ
 # (e.g. nonebot_plugin_htmlrender → get_driver()).  Pure-logic modules
 # like parser.py should remain importable without a running NoneBot.
 if not environ.get("PYTEST_RUNNING"):
+    from nonebot import require
     from nonebot.plugin import PluginMetadata
 
     from . import handlers  # noqa: F401
     from .config import ShitBotConfig
+
+    require("nonebot_plugin_htmlrender")
+    require("nonebot_plugin_localstore")
 
     __plugin_meta__ = PluginMetadata(
         name="shitbot",

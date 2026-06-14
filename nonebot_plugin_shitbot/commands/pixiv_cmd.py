@@ -30,7 +30,7 @@ class BotCommandPixiv(BotCommand):
         parser.set_rule(min=1, max=1, types=[int])
         parser.add_opt("-r", required=True, choice=["off", "on"], default=["off"])
         parser.add_opt(
-            "-s", required=True, choice=["regular", "original"], default=["regular"]
+            "-s", required=True, choice=["regular", "original"], default=["original"]
         )
         return parser
 

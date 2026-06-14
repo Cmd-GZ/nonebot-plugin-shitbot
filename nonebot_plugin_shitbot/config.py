@@ -103,18 +103,6 @@ class Config:
     def plugin_base(self) -> Path:
         return self._plugin_base
 
-    @property
-    def script_p2png_path(self) -> Path:
-        return self._plugin_base / "scripts" / "p2png.sh"
-
-    @property
-    def script_png2v_path(self) -> Path:
-        return self._plugin_base / "scripts" / "png2v.sh"
-
-    @property
-    def script_png2fr_path(self) -> Path:
-        return self._plugin_base / "scripts" / "png2fr.sh"
-
     def _store_get(self) -> Any:
         """Lazily initialise localstore.
 

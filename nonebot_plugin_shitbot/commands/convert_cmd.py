@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import shutil
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
+import magic
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
@@ -20,7 +22,7 @@ from ..tasks import EndOfQueue, prod_cons
 if TYPE_CHECKING:
     from ..session import BotSession
 
-bash = shutil.which("bash") or "/bin/bash"
+ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
 
 
 class BotCommandConvert(BotCommand):
@@ -94,26 +96,40 @@ class BotCommandConvert(BotCommand):
         if download_path == "":
             return ""
         png_path = png_dir / f"{uuid.uuid4().hex}.png"
+        mime = magic.from_file(download_path, mime=True)
         logger.info(
-            f"执行图片转png脚本: {config.script_p2png_path} {download_path} {png_path}"
+            f"检测文件类型: {mime}, 执行图片转 PNG: {download_path} -> {png_path}"
         )
+        if mime == "image/png":
+            shutil.copy(download_path, png_path)
+            logger.info(f"转换 PNG 成功: {png_path}")
+            return str(png_path)
         proc = await asyncio.create_subprocess_exec(
-            bash,
-            str(config.script_p2png_path),
+            ffmpeg,
+            "-y",
+            "-i",
             str(download_path),
+            "-vcodec",
+            "png",
+            "-pix_fmt",
+            "rgba",
+            "-update",
+            "1",
             str(png_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
         if stdout:
-            logger.info(f"脚本 stdout:\n{stdout.decode()}")
+            logger.info(f"ffmpeg stdout:\n{stdout.decode()}")
         if stderr:
-            logger.warning(f"脚本 stderr:\n{stderr.decode()}")
+            logger.warning(f"ffmpeg stderr:\n{stderr.decode()}")
         if proc.returncode != 0:
-            logger.error(f"转换失败: {stderr.decode()[:]}")
+            logger.error(
+                f"转换 PNG 失败 (returncode={proc.returncode}): {stderr.decode()[:] if stderr else ''}"
+            )
             return ""
-        logger.info(f"转换图片成功: {png_path}")
+        logger.info(f"转换 PNG 成功: {png_path}")
         return str(png_path)
 
     @staticmethod
@@ -121,24 +137,47 @@ class BotCommandConvert(BotCommand):
         if png_path == "":
             return ""
         video_path = video_dir / f"{uuid.uuid4().hex}.mp4"
-        logger.info(
-            f"执行图片转视频脚本: {config.script_png2v_path} {png_path} {video_path}"
-        )
+        duration = round(random.uniform(1, 5), 3)
+        logger.info(f"执行图片转视频 (ffmpeg, {duration}s): {png_path} -> {video_path}")
         proc = await asyncio.create_subprocess_exec(
-            bash,
-            str(config.script_png2v_path),
+            ffmpeg,
+            "-y",
+            "-loop",
+            "1",
+            "-i",
             str(png_path),
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "1",
+            "-preset",
+            "ultrafast",
+            "-g",
+            "114514",
+            "-t",
+            str(duration),
+            "-pix_fmt",
+            "yuv420p",
+            "-vf",
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-shortest",
             str(video_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
         if stdout:
-            logger.info(f"脚本 stdout:\n{stdout.decode()}")
+            logger.info(f"ffmpeg stdout:\n{stdout.decode()}")
         if stderr:
-            logger.warning(f"脚本 stderr:\n{stderr.decode()}")
+            logger.warning(f"ffmpeg stderr:\n{stderr.decode()}")
         if proc.returncode != 0:
-            logger.error(f"转换失败: {stderr.decode()[:]}")
+            logger.error(
+                f"转换视频失败 (returncode={proc.returncode}): {stderr.decode()[:] if stderr else ''}"
+            )
             return ""
         logger.info(f"转换视频成功: {video_path}")
         return str(video_path)
@@ -148,26 +187,31 @@ class BotCommandConvert(BotCommand):
         if png_path == "":
             return ""
         frame_path = frame_dir / f"{uuid.uuid4().hex}.png"
-        logger.info(
-            f"执行图片加框脚本: {config.script_png2fr_path} {png_path} {frame_path}"
-        )
+        border = random.randint(10, 50)
+        logger.info(f"执行图片加黑框 (ffmpeg, {border}px): {png_path} -> {frame_path}")
         proc = await asyncio.create_subprocess_exec(
-            bash,
-            str(config.script_png2fr_path),
+            ffmpeg,
+            "-i",
             str(png_path),
+            "-vf",
+            f"pad=iw+{border}:ih+{border}:(ow-iw)/2:(oh-ih)/2:black",
+            "-update",
+            "1",
             str(frame_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
         if stdout:
-            logger.info(f"脚本 stdout:\n{stdout.decode()}")
+            logger.info(f"ffmpeg stdout:\n{stdout.decode()}")
         if stderr:
-            logger.warning(f"脚本 stderr:\n{stderr.decode()}")
+            logger.warning(f"ffmpeg stderr:\n{stderr.decode()}")
         if proc.returncode != 0:
-            logger.error(f"转换失败: {stderr.decode()[:]}")
+            logger.error(
+                f"加框失败 (returncode={proc.returncode}): {stderr.decode()[:] if stderr else ''}"
+            )
             return ""
-        logger.info(f"转换方形图片成功: {frame_path}")
+        logger.info(f"加黑框成功: {frame_path}")
         return str(frame_path)
 
     async def _send_outputs(self):
