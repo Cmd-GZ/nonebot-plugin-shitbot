@@ -1,15 +1,21 @@
 import asyncio
-import yaml
-
 from pathlib import Path
 
+import yaml
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 
 from ..command import BotCommand
-from ..session import BotSession
-from ..parser import BotArgParser
 from ..msgdatabase import BotMsgDataBase
-from ..msgutils import DumpedMsg, DumpedSeg, DataVariables, dump_message, msg_filter, modify_msg_data
+from ..msgutils import (
+    DataVariables,
+    DumpedMsg,
+    DumpedSeg,
+    dump_message,
+    modify_msg_data,
+    msg_filter,
+)
+from ..parser import BotArgParser
+from ..session import BotSession
 from ..tasks import autoreply_lock
 from .autoreply_main_cmd import BotCommandAutoReplyMain
 
@@ -33,6 +39,8 @@ class BotCommandAutoreply(BotCommand):
         self._rp: list[str] = []
         self._T: list[str] = []
         self._t: list[str] = []
+        self._D: list[str] = []
+        self._d: list[str] = []
         self._K: list[str] = []
         self._k: list[str] = []
         self._R: list[str] = []
@@ -162,7 +170,7 @@ class BotCommandAutoreply(BotCommand):
         stop.set_rule(max=0)
         stop.add_opt("--auto", default=[0])
 
-        lst.set_rule(min=1,max=1)
+        lst.set_rule(min=1, max=1)
 
         info.set_rule(max=None)
 
@@ -176,14 +184,24 @@ class BotCommandAutoreply(BotCommand):
         delete.add_opt("--key", required=True, max_appeared=None)
         delete.add_opt("--rp", required=True, max_appeared=None)
 
-        reply.set_rule(min=1,max=1, need_subcmd=True)
+        reply.set_rule(min=1, max=1, need_subcmd=True)
         reply_start = reply.add_subparser("start")
         reply_stop = reply.add_subparser("stop")
         reply_modify = reply.add_subparser("modify")
 
-        key.set_rule(min=1,max=1)
-        key.add_opt("-T", required=True, choice=["delmark", "delspace", "upper", "lower"], max_appeared=None)
-        key.add_opt("-t", required=True, choice=["delmark", "delspace", "upper", "lower"], max_appeared=None)
+        key.set_rule(min=1, max=1)
+        key.add_opt(
+            "-T",
+            required=True,
+            choice=["delmark", "delspace", "upper", "lower"],
+            max_appeared=None,
+        )
+        key.add_opt(
+            "-t",
+            required=True,
+            choice=["delmark", "delspace", "upper", "lower"],
+            max_appeared=None,
+        )
         key.add_opt("-D", required=True, max_appeared=None)
         key.add_opt("-d", required=True, max_appeared=None)
         key.add_opt("-K", required=True, max_appeared=None)
@@ -217,7 +235,7 @@ class BotCommandAutoreply(BotCommand):
         if subsubcmd == "stop" and self._rstate != "start":
             return await super()._guard_state()
         return True
-        
+
     async def _start(self):
         autoreply_session = BotSession.make("public", "autoreply")
         main_command = BotCommandAutoReplyMain.make(
@@ -229,6 +247,7 @@ class BotCommandAutoreply(BotCommand):
             await main_command.run(Message())
         if self._auto:
             from ruamel.yaml import YAML
+
             config_path = Path(__file__).parent.parent / "config.yaml"
             config_yaml = YAML()
             data = config_yaml.load(config_path)
@@ -252,6 +271,7 @@ class BotCommandAutoreply(BotCommand):
         await _exe()
         if self._auto:
             from ruamel.yaml import YAML
+
             config_path = Path(__file__).parent.parent / "config.yaml"
             config_yaml = YAML()
             data = config_yaml.load(config_path)
@@ -334,7 +354,9 @@ class BotCommandAutoreply(BotCommand):
             return
         self._rstate = "start"
         self._reply_name = reply_name
-        await self.send_msg(f"请发送仅包含图片或文字的信息, 或者发送 /autoreply reply {reply_name} stop 停止设置")
+        await self.send_msg(
+            f"请发送仅包含图片或文字的信息, 或者发送 /autoreply reply {reply_name} stop 停止设置"
+        )
         self._is_accept_msg = True
 
     async def _reply_stop(self, reply_name: str):
@@ -371,7 +393,7 @@ class BotCommandAutoreply(BotCommand):
                     "summary": DataVariables(self._sum),
                     "sub_type": DataVariables(self._st),
                 },
-                ["image"]
+                ["image"],
             )
             await self._set_reply(reply_name)
             self._temp_msg = []
@@ -383,6 +405,7 @@ class BotCommandAutoreply(BotCommand):
             await self.send_msg(f"错误: 键 {key_name} 不存在")
             self.unlock()
             return
+
         def _rm_dup(lst_A: list, lst_R: list):
             dup = []
             for elem in lst_A:
@@ -403,7 +426,12 @@ class BotCommandAutoreply(BotCommand):
                     lst.remove(elem)
             return lst
 
-        for (lst_A, lst_R) in [(self._T, self._t), (self._D, self._d), (self._K, self._k), (self._R, self._r)]:
+        for lst_A, lst_R in [
+            (self._T, self._t),
+            (self._D, self._d),
+            (self._K, self._k),
+            (self._R, self._r),
+        ]:
             _rm_dup(lst_A, lst_R)
         for lst in [self._R, self._r]:
             rem = []
@@ -414,9 +442,13 @@ class BotCommandAutoreply(BotCommand):
             for elem in rem:
                 lst.remove(elem)
         data = []
-        for (lst_S, lst_A, lst_R) in [(self._rule[key_name]["trans"], self._T, self._t), (self._rule[key_name]["dels"], self._D, self._d), (self._rule[key_name]["keywords"], self._K, self._k), (self._rule[key_name]["replys"], self._R, self._r)]:
+        for lst_S, lst_A, lst_R in [
+            (self._rule[key_name]["trans"], self._T, self._t),
+            (self._rule[key_name]["dels"], self._D, self._d),
+            (self._rule[key_name]["keywords"], self._K, self._k),
+            (self._rule[key_name]["replys"], self._R, self._r),
+        ]:
             data.append(_get_lst(lst_S, lst_A, lst_R))
-                
 
         _m = None
         if self._m == 0:
@@ -431,12 +463,10 @@ class BotCommandAutoreply(BotCommand):
                 dels=data[1],
                 is_contain=_m,
                 keywords=data[2],
-                replys=data[3]
+                replys=data[3],
             )
         await self.send_msg("修改成功")
         self.unlock()
-
-
 
     async def roger(self, event: MessageEvent):
         async with self._roger_lock:
@@ -452,8 +482,6 @@ class BotCommandAutoreply(BotCommand):
                 if reply_name is None:
                     raise ValueError
                 asyncio.create_task(self.run(Message(f"reply {reply_name} stop")))
-
-
 
     async def run(self, args: Message):
         async with autoreply_lock:
@@ -517,7 +545,6 @@ class BotCommandAutoreply(BotCommand):
             self._st = subsubparser.opts_value.get("--st", [])
             self._rstate = subsubcmd if subsubcmd != "modify" else ""
 
-
         if subcmd == "start":
             await self._start()
         if subcmd == "stop":
@@ -545,6 +572,3 @@ class BotCommandAutoreply(BotCommand):
         if subcmd == "key":
             key_name = subparser.value[0]
             await self._key_modify(key_name)
-
-
-

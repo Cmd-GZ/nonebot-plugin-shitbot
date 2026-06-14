@@ -280,7 +280,7 @@ class BotMsgDataBase:
         for _, media in old_medias_raw:
             if media != "":
                 self._del_media(media)
-        
+
         self._update_rc()
 
         msg_path.write_text(yaml.safe_dump(storable), encoding="utf-8")

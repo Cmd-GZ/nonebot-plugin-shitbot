@@ -386,9 +386,9 @@ def msg_filter(
         return msg
     result: DumpedMsg = []
     for seg in msg:
-        if not func(seg):
-            continue
         new_seg = _seg_copy(seg)
+        if not func(new_seg):
+            continue
         children = _msg_walk_children(seg)
         if children is not None:
             new_seg["data"]["content"] = msg_filter(func, children, depth=depth - 1)
