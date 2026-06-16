@@ -24,6 +24,7 @@ _TERM_SCHEMA = {
 class BotCommandAutoReplyMain(BotCommand):
     _name = "autoreply_main_rec"
     _autoreply_dir = config.data / "autoreply"
+    _state_path = _autoreply_dir / "state.yaml"
     _rule_path = _autoreply_dir / "rule.yaml"
     _msg_table_path = _autoreply_dir / "msg_table.yaml"
     _rule: dict[str, dict[str, Any]]
@@ -93,6 +94,7 @@ class BotCommandAutoReplyMain(BotCommand):
         random.seed()
         async with autoreply_lock:
             self._database = BotMsgDataBase(self._autoreply_dir)
+            self._state_path.touch(exist_ok=True)
             self._rule_path.touch(exist_ok=True)
             self._msg_table_path.touch(exist_ok=True)
             self.load_meta()

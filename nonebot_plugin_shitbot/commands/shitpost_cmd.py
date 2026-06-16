@@ -103,8 +103,8 @@ class BotCommandShitpost(BotCommand):
                 media_path = media_dir / f"{uuid.uuid4().hex}"
                 async with httpx.AsyncClient() as client:
                     await stuff_download(client, url, media_path)
-                    container_path = config.client_base / media_path.relative_to(
-                        config.bot_base
+                    container_path = config.client_cache / media_path.relative_to(
+                        config.cache
                     )
                     medias_path.append(media_path)
                     medias.append(str(container_path))

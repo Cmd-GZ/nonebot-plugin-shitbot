@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 
 import yaml
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
@@ -23,6 +22,7 @@ from .autoreply_main_cmd import BotCommandAutoReplyMain
 class BotCommandAutoreply(BotCommand):
     _name = "autoreply"
     _autoreply_dir = BotCommandAutoReplyMain._autoreply_dir
+    _state_path = BotCommandAutoReplyMain._state_path
     _rule_path = BotCommandAutoReplyMain._rule_path
     _msg_table_path = BotCommandAutoReplyMain._msg_table_path
 
@@ -246,13 +246,9 @@ class BotCommandAutoreply(BotCommand):
         else:
             await main_command.run(Message())
         if self._auto:
-            from ruamel.yaml import YAML
-
-            config_path = Path(__file__).parent.parent / "config.yaml"
-            config_yaml = YAML()
-            data = config_yaml.load(config_path)
-            data["if_auto_start_autoreply"] = True
-            config_yaml.dump(data, config_path)
+            self._state_path.write_text(
+                yaml.safe_dump(True, allow_unicode=True), encoding="utf-8"
+            )
         await self.send_msg("自动回复已开启")
         self.unlock()
 
@@ -270,13 +266,9 @@ class BotCommandAutoreply(BotCommand):
 
         await _exe()
         if self._auto:
-            from ruamel.yaml import YAML
-
-            config_path = Path(__file__).parent.parent / "config.yaml"
-            config_yaml = YAML()
-            data = config_yaml.load(config_path)
-            data["if_auto_start_autoreply"] = False
-            config_yaml.dump(data, config_path)
+            self._state_path.write_text(
+                yaml.safe_dump(False, allow_unicode=True), encoding="utf-8"
+            )
         await self.send_msg("自动回复已关闭")
         self.unlock()
 
@@ -486,6 +478,7 @@ class BotCommandAutoreply(BotCommand):
     async def run(self, args: Message):
         async with autoreply_lock:
             self._database = BotMsgDataBase(self._autoreply_dir)
+            self._state_path.touch(exist_ok=True)
             self._rule_path.touch(exist_ok=True)
             self._msg_table_path.touch(exist_ok=True)
             self._load_meta()

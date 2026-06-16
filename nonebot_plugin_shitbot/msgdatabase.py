@@ -308,8 +308,8 @@ class BotMsgDataBase:
 
     def prepare_send_msg(self, sha256: str) -> Message:
         msg = self.get_msg(sha256)
-        contain_medias_dir = config.client_base / self._medias_dir.relative_to(
-            config.bot_base
+        contain_medias_dir = config.client_data / self._medias_dir.relative_to(
+            config.data
         )
 
         def _map(seg: DumpedSeg) -> DumpedSeg:

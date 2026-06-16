@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
-import magic
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
@@ -96,6 +95,8 @@ class BotCommandConvert(BotCommand):
         if download_path == "":
             return ""
         png_path = png_dir / f"{uuid.uuid4().hex}.png"
+        import magic
+
         mime = magic.from_file(download_path, mime=True)
         logger.info(
             f"检测文件类型: {mime}, 执行图片转 PNG: {download_path} -> {png_path}"
@@ -239,9 +240,7 @@ class BotCommandConvert(BotCommand):
             if not output_file.exists():
                 logger.error(f"输出文件不存在: {output_file}")
                 continue
-            container_path = config.client_base / output_file.relative_to(
-                config.bot_base
-            )
+            container_path = config.client_cache / output_file.relative_to(config.cache)
             try:
                 if self._mode == "video":
                     await self.send_msg(

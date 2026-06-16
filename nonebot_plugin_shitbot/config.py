@@ -1,127 +1,214 @@
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
-from typing import Any
 
-import yaml
 from pydantic import BaseModel
 
-# User-configurable fields model.
-# ShitBotConfig is declared in PluginMetadata.config so that NoneFlow
-# can introspect the plugin's configuration schema.
+# ── Permission entries (hard-coded, not read from file) ─────────────
+
+_DEFAULT_ENTRIES: dict[str, list] = {
+    "randpic": [
+        "是否允许使用randpic命令",
+        False,
+        [],
+        ["banned"],
+        True,
+        ["setu"],
+        ["banned"],
+    ],
+    "advrandpic": [
+        "是否允许使用advrandpic命令",
+        False,
+        [],
+        ["banned"],
+        True,
+        ["setu"],
+        ["banned"],
+    ],
+    "pixiv": [
+        "是否允许使用pixiv命令",
+        False,
+        [],
+        ["banned"],
+        True,
+        ["setu"],
+        ["banned"],
+    ],
+    "nsfw": [
+        "是否允许修改二次元图片相关命令的-r选项",
+        True,
+        ["nsfw"],
+        ["banned"],
+        True,
+        ["nsfw"],
+        ["banned"],
+    ],
+    "multisetu": [
+        "是否允许一次获取多张二次元图片",
+        False,
+        [],
+        ["banned"],
+        True,
+        ["multipic"],
+        ["banned"],
+    ],
+    "convert": [
+        "是否允许使用convert命令",
+        True,
+        ["convert"],
+        ["banned"],
+        True,
+        ["convert"],
+        ["banned"],
+    ],
+    "shitpost": [
+        "是否允许使用shitpost命令",
+        True,
+        ["shitpost"],
+        ["banned"],
+        True,
+        ["shitpost"],
+        ["banned"],
+    ],
+    "help": ["是否允许使用help命令", False, [], ["banned"], False, [], ["banned"]],
+    "md2pic": ["是否允许使用md2pic命令", False, [], ["banned"], False, [], ["banned"]],
+    "session": [
+        "是否允许使用session命令",
+        False,
+        [],
+        ["banned"],
+        False,
+        [],
+        ["banned"],
+    ],
+    "otherwise": [
+        "是否会在错误命令输入后提示",
+        False,
+        [],
+        ["banned"],
+        False,
+        [],
+        ["banned"],
+    ],
+    "perm": [
+        "是否允许使用perm命令的check选项",
+        False,
+        [],
+        ["banned"],
+        False,
+        [],
+        ["banned"],
+    ],
+    "permmanager": [
+        "是否允许使用perm命令所有选项",
+        True,
+        [],
+        ["banned"],
+        True,
+        [],
+        ["banned"],
+    ],
+    "autoreplymanager": [
+        "是否允许使用autoreply命令所有选项",
+        True,
+        [],
+        ["banned"],
+        True,
+        [],
+        ["banned"],
+    ],
+}
+
+
+# ── Plugin configuration model (consumed by get_plugin_config) ──────
+# Every field has a default → zero-config loadable.
+# Users set overrides via scope-prefixed env vars, e.g.:
+#   SHITBOT__CLIENT_CACHE=/app/cache/nonebot_plugin_shitbot
+#   SHITBOT__CLIENT_DATA=/app/data/nonebot_plugin_shitbot
+#   SHITBOT__OWNERS='["114514","1919810"]'
+#   SHITBOT__MAX_MESSAGE_DEPTH=16
+#   SHITBOT__PIXIV_ACCESS_TOKEN=kFccrAzYtHursDAyVmE50
 
 
 class ShitBotConfig(BaseModel):
-    bot_base: Path  # persistent storage root (cache / data / config live here)
-    client_base: Path  # client-side persistent storage root (for container deploys)
-    entries: dict[str, list]  # permission entries for each command
+    """Scoped configuration fields — env vars use SHITBOT__ prefix."""
+
+    client_cache: Path | None = None  # None = same filesystem as bot
+    client_data: Path | None = None
     owners: list[str] | None = None
-    max_message_depth: int = 10
-    if_auto_start_autoreply: bool = True
+    max_message_depth: int = 16
     pixiv_access_token: str = ""
 
-    @classmethod
-    def from_yaml(cls, file: Path) -> ShitBotConfig:
-        if not file.exists():
-            raise FileNotFoundError(f"config file not found: {file}")
-        with file.open(encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        model_fields = cls.model_fields.keys()
-        filtered = {k: v for k, v in data.items() if k in model_fields}
-        return cls(**filtered)
+
+class PluginConfig(BaseModel):
+    """Scope wrapper so that SHITBOT__CLIENT_CACHE, etc. are recognised."""
+
+    shitbot: ShitBotConfig = ShitBotConfig()
 
 
-# Path proxy / facade.
-# Keeps the existing config.cache / config.data / config.permissions
-# interface while delegating actual storage to nonebot-plugin-localstore.
-# - User-facing fields (max_message_depth, ...) proxy directly to ShitBotConfig
-#   and are always available (no NoneBot dependency).
-# - Storage paths (cache / data / config / permissions) lazily require localstore
-#   on first access.
+# ── Runtime facade ──────────────────────────────────────────────────
+# Wraps dotenv-sourced config with localstore-backed storage paths.
+#   • Config.__init__ receives cache / data as *parameters* — it never
+#     touches NoneBot or localstore itself.
+#   • Unit tests (PYTEST_RUNNING) can pass dummy paths.
+#   • Production caller (get_config) resolves localstore once.
+#
+# Config does NOT handle autoreply state — that is the responsibility
+# of autoreply_cmd.py / handlers.py, which read/write data/autoreply/
+# directly via config.data.
 
 
 class Config:
-    def __init__(self, user_config: ShitBotConfig):
+    def __init__(self, user_config: ShitBotConfig, *, cache: Path, data: Path):
         self._uc = user_config
-        self._plugin_base = Path(__file__).parent
-        self._store: Any = None  # lazily populated by _store_get()
+        self._cache = cache  # already resolved by caller
+        self._data = data
 
-    # --- user-config fields (no NoneBot dependency) ---
-
-    @property
-    def bot_base(self) -> Path:
-        return self._uc.bot_base
+    # -- user-config fields -------------------------------------------
 
     @property
-    def client_base(self) -> Path:
-        return self._uc.client_base
+    def client_cache(self) -> Path:
+        """Container-side cache path; falls back to local cache if unset."""
+        return self._uc.client_cache or self._cache
 
     @property
-    def entries(self) -> dict[str, list]:
-        return self._uc.entries
-
-    @property
-    def owners(self) -> list[str] | None:
-        return self._uc.owners
+    def client_data(self) -> Path:
+        """Container-side data path; falls back to local data if unset."""
+        return self._uc.client_data or self._data
 
     @property
     def max_message_depth(self) -> int:
         return self._uc.max_message_depth
 
     @property
-    def if_auto_start_autoreply(self) -> bool:
-        return self._uc.if_auto_start_autoreply
-
-    @property
     def pixiv_access_token(self) -> str:
         return self._uc.pixiv_access_token
 
-    # --- storage paths (lazily load localstore) ---
+    # -- owners (dotenv only) -----------------------------------------
+
+    @property
+    def owners(self) -> list[str] | None:
+        return self._uc.owners
+
+    # -- entries (hard-coded) -----------------------------------------
+
+    @property
+    def entries(self) -> dict[str, list]:
+        return _DEFAULT_ENTRIES
+
+    # -- storage paths ------------------------------------------------
 
     @property
     def cache(self) -> Path:
-        return self._store_get().get_plugin_cache_dir()
+        return self._cache
 
     @property
     def data(self) -> Path:
-        return self._store_get().get_plugin_data_dir()
-
-    @property
-    def config(self) -> Path:
-        """localstore config dir (not the user-written config.yaml)."""
-        return self._store_get().get_plugin_config_dir()
-
-    @property
-    def permissions(self) -> Path:
-        return self.config / "permissions"
-
-    # --- read-only attributes ---
-
-    @property
-    def plugin_base(self) -> Path:
-        return self._plugin_base
-
-    def _store_get(self) -> Any:
-        """Lazily initialise localstore.
-
-        On the first access to a storage path we inject bot_base
-        subdirectories into the environment so that localstore picks
-        them up, then require-and-import the plugin.
-        """
-        if self._store is None:
-            _inject_localstore_env(self._uc.bot_base)
-            from nonebot import require
-
-            require("nonebot_plugin_localstore")
-            import nonebot_plugin_localstore as store
-
-            self._store = store
-        return self._store
+        return self._data
 
 
-# Singleton
+# ── Singleton (lazy — unit-test friendly) ───────────────────────────
 
 _config: Config | None = None
 
@@ -129,51 +216,31 @@ _config: Config | None = None
 def get_config() -> Config:
     global _config
     if _config is None:
-        config_path = Path(__file__).parent / "config.yaml"
-        if not config_path.exists():
-            default_config_path = Path(__file__).parent / "default_config.yaml"
-            with (
-                open(default_config_path, encoding="utf-8") as src,
-                open(config_path, "w", encoding="utf-8") as dst,
-            ):
-                dst.write(src.read())
-        _config = Config(ShitBotConfig.from_yaml(config_path))
+        if os.environ.get("PYTEST_RUNNING"):
+            # Unit test: no NoneBot driver, use bare defaults + dummy paths
+            _config = Config(
+                ShitBotConfig(),
+                cache=Path("/tmp/shitbot_test_cache"),
+                data=Path("/tmp/shitbot_test_data"),
+            )
+        else:
+            # Production: one-shot localstore resolution
+            from nonebot import get_plugin_config, require
+
+            require("nonebot_plugin_localstore")
+            import nonebot_plugin_localstore as store
+
+            scoped = get_plugin_config(PluginConfig)
+            _config = Config(
+                scoped.shitbot,
+                cache=store.get_plugin_cache_dir(),
+                data=store.get_plugin_data_dir(),
+            )
     return _config
 
 
-def _inject_localstore_env(bot_base: Path) -> None:
-    """Inject bot_base subdirs into localstore's plugin-level env vars.
-
-    Defaults point at bot_base/{cache,data,config}.  If the user has
-    already set any of these env vars (e.g. in dotenv) the existing
-    values are preserved.
-    """
-    plugin_id = "nonebot_plugin_shitbot"
-    for env_var, subdir in [
-        ("LOCALSTORE_PLUGIN_CACHE_DIR", "cache"),
-        ("LOCALSTORE_PLUGIN_DATA_DIR", "data"),
-        ("LOCALSTORE_PLUGIN_CONFIG_DIR", "config"),
-    ]:
-        existing = os.environ.get(env_var)
-        mapping: dict[str, str] = {}
-        if existing:
-            try:
-                mapping = json.loads(existing)
-                if not isinstance(mapping, dict):
-                    mapping = {}
-            except (json.JSONDecodeError, TypeError):
-                pass
-        mapping.setdefault(plugin_id, str(bot_base / subdir))
-        os.environ[env_var] = json.dumps(mapping, separators=(",", ":"))
-
-
 def __getattr__(name: str):
-    """Module-level lazy attribute.
-
-    `from .config import config` calls get_config() on first access so
-    that the localstore require is not triggered during unit tests
-    (PYTEST_RUNNING environment).
-    """
+    """Module-level lazy attribute for ``from .config import config``."""
     if name == "config":
         return get_config()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -61,8 +61,7 @@
 
 ## 配置
 
-插件启动时会自动从插件目录下的 `default_config.yaml` 复制默认配置到 `config.yaml`，
-之后编辑 `config.yaml` 即可。
+插件配置通过 NoneBot 标准的 dotenv / 环境变量读取。
 
 ### 安装
 
@@ -70,14 +69,17 @@
 nb plugin install nonebot-plugin-shitbot
 ```
 
-### 首次部署必填项
+### 环境变量
 
-| 配置项 | 类型 | 说明 |
-|---|---|---|
-| `bot_base` | 路径 | 插件的持久存储根目录（cache / data / config / 均存放于此） |
-| `client_base` | 路径 | 客户端侧的持久存储根目录（用于兼容容器部署） |
-| `owners` | 字符串列表 | 机器人所有者 QQ 号列表 |
-| `pixiv_access_token` | 字符串 | Pixiv API 访问令牌（可选填，使用 `/pixiv` 时必填） |
+在 NoneBot 项目的 `.env` 文件中配置，变量如下：
+
+| 配置项 | 类型 | 默认值 | 是否必填 | 说明 |
+|---|---|---|---|---|
+| `SHITBOT__CLIENT_CACHE` | 路径 | 本地缓存路径 | 否 | 容器端缓存路径。本地缓存路径为 `$LOCALSTORE_CACHE_DIR/nonebot_plugin_shitbot`，容器端需对应挂载 |
+| `SHITBOT__CLIENT_DATA` | 路径 | 本地数据路径 | 否 | 容器端数据路径。本地数据路径为 `$LOCALSTORE_DATA_DIR/nonebot_plugin_shitbot`，容器端需对应挂载 |
+| `SHITBOT__OWNERS` | JSON 字符串列表 | None | 是 | 机器人所有者 QQ 号列表，如 `'["114514"]'` |
+| `SHITBOT__MAX_MESSAGE_DEPTH` | 整数 | `16` | 否 | 消息解析最大递归深度 |
+| `SHITBOT__PIXIV_ACCESS_TOKEN` | 字符串 | "" | 部分必填 | Pixiv API 访问令牌（使用 `/pixiv` 时必填） |
 
 ### 触发规则
 

@@ -14,6 +14,7 @@ class BotPermissions:
     _sentinel = object()
     _perm_dir: Path
     _perm_users_path: Path
+    _perm_owners_path: Path
     _perm_groups_path: Path
     _perm_entries_path: Path
     _users: dict[str, list[str]]
@@ -41,13 +42,14 @@ class BotPermissions:
         if _internal is not self._sentinel:
             raise ValueError("请使用 BotPermissions.make() 方法创建实例")
 
-        self._perm_dir = config.permissions
+        self._perm_dir = config.data / "permissions"
         if not self._perm_dir.exists():
             if self._perm_dir.is_file():
                 raise FileExistsError(f"权限目录路径存在但不是目录: {self._perm_dir}")
             self._perm_dir.mkdir(parents=True)
 
         self._perm_users_path = self._perm_dir / "users.yaml"
+        self._perm_owners_path = self._perm_dir / "owners.yaml"
         self._perm_groups_path = self._perm_dir / "groups.yaml"
         self._perm_entries_path = self._perm_dir / "entries.yaml"
 
@@ -78,8 +80,19 @@ class BotPermissions:
         ):
             raise ValueError(f"权限文件 {self._perm_entries_path} 中的条目格式错误")
 
-        if config.owners is not None:
-            self._users["owners"] = config.owners
+        if config.owners is None:
+            self._perm_owners_path.unlink(missing_ok=True)
+        owners = None
+        if not self._perm_owners_path.exists() and config.owners is not None:
+            self._perm_owners_path.write_text(
+                yaml.safe_dump(config.owners), encoding="utf-8"
+            )
+        if self._perm_owners_path.exists():
+            owners = yaml.safe_load(self._perm_owners_path.read_text(encoding="utf-8"))
+        if owners is not None and not isinstance(owners, list):
+            raise ValueError("owners获取失败")
+        if owners is not None:
+            self._users["owners"] = owners
 
         default_entries = config.entries
         default_entries_keys = default_entries.keys()
@@ -104,7 +117,7 @@ class BotPermissions:
                 self._init_entry(self._entries[key], default_entries[key])
                 is_inited = True
         except (KeyError, TypeError, ValueError) as e:
-            raise ValueError(f"项目配置文件中权限项声明项entries格式错误: {e}")
+            raise ValueError(f"权限项声明项entries格式错误: {e}")
 
         if not is_inited:
             return
@@ -139,26 +152,24 @@ class BotPermissions:
                 index += 1
 
     def update_users(self):
-        with self._perm_users_path.open("w", encoding="utf-8") as f:
-            users = self._users.copy()
-            owners = users.pop("owners", None)
-            yaml.safe_dump(users, f, allow_unicode=True)
-
-            from ruamel.yaml import YAML
-
-            config_path = Path(__file__).parent / "config.yaml"
-            config_yaml = YAML()
-            data = config_yaml.load(config_path)
-            data["owners"] = owners
-            config_yaml.dump(data, config_path)
+        users = self._users.copy()
+        owners = users.pop("owners", None)
+        self._perm_users_path.write_text(
+            yaml.safe_dump(users, allow_unicode=True), encoding="utf-8"
+        )
+        self._perm_owners_path.write_text(
+            yaml.safe_dump(owners, allow_unicode=True), encoding="utf-8"
+        )
 
     def update_groups(self):
-        with self._perm_groups_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(self._groups, f, allow_unicode=True)
+        self._perm_groups_path.write_text(
+            yaml.safe_dump(self._groups, allow_unicode=True), encoding="utf-8"
+        )
 
     def update_entries(self):
-        with self._perm_entries_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(self._entries, f, allow_unicode=True)
+        self._perm_entries_path.write_text(
+            yaml.safe_dump(self._entries, allow_unicode=True), encoding="utf-8"
+        )
 
     def precheck_permission(self, entry_name: str, group_id: str, user_id: str) -> bool:
         entry = self._entries.get(entry_name)

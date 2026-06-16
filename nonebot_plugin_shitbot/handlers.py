@@ -1,5 +1,6 @@
 import asyncio
 
+import yaml
 from nonebot import get_driver, on_command, on_message
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 from nonebot.log import logger
@@ -95,8 +96,11 @@ async def startup():
 
 @driver.on_bot_connect
 async def bot_connect(bot: Bot):
-    if not config.if_auto_start_autoreply:
-        return
+    autoreply_auto_path = config.data / "autoreply" / "state.yaml"
+    if autoreply_auto_path.exists():
+        is_auto = yaml.safe_load(autoreply_auto_path.read_text(encoding="utf-8"))
+        if is_auto == False:  # is_auto is None means True
+            return
     session = BotSession.make("public", "autoreply")
     autoreply_main = BotCommandAutoReplyMain.make(bot, session, _pid=session.curpid)
     if autoreply_main is None:
