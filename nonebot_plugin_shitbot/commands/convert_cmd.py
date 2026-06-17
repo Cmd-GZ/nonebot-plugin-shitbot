@@ -11,7 +11,7 @@ import httpx
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.log import logger
 
-from ..aux import rm_cache, stuff_download
+from ..aux import stuff_download
 from ..command import BotCommand
 from ..config import config
 from ..msgutils import dump_message, get_message_with_reply, get_multimedias_url
@@ -313,6 +313,8 @@ class BotCommandConvert(BotCommand):
                         client,
                         downloads_dir,
                     )
+            except asyncio.CancelledError:
+                pass
             except Exception as e:
                 logger.exception(f"urls_to_downloads 管道异常退出: {e}")
 
@@ -321,6 +323,8 @@ class BotCommandConvert(BotCommand):
                 await prod_cons(
                     self._downloads, self._pngs, self._download_to_png, pngs_dir
                 )
+            except asyncio.CancelledError:
+                pass
             except Exception as e:
                 logger.exception(f"downloads_to_pngs 管道异常退出: {e}")
 
@@ -335,12 +339,14 @@ class BotCommandConvert(BotCommand):
                         await prod_cons(
                             self._pngs, self._outputs, self._png_to_frame, outputs_dir
                         )
+            except asyncio.CancelledError:
+                pass
             except Exception as e:
                 logger.exception(f"pngs_to_outputs 管道异常退出: {e}")
 
-        asyncio.create_task(_urls_to_downloads())
-        asyncio.create_task(_downloads_to_pngs())
-        asyncio.create_task(_pngs_to_outputs())
+        self._create_task(_urls_to_downloads())
+        self._create_task(_downloads_to_pngs())
+        self._create_task(_pngs_to_outputs())
 
         logger.info(f"用户 {self.session.user_id} 开始了图片收集")
         await self.send_msg(
@@ -364,7 +370,6 @@ class BotCommandConvert(BotCommand):
         await self.send_msg("转换完毕。")
 
         await self._send_outputs()
-        await rm_cache(self.session.group_id, self.session.user_id, str(self._pid))
         self.unlock()
         return
 

@@ -23,8 +23,10 @@ class BotCommandSession(BotCommand):
         parser.set_rule(max=0, need_subcmd=True)
         switch = parser.add_subparser("switch")
         info = parser.add_subparser("info")
+        stop = parser.add_subparser("stop")
         switch.set_rule(min=1, max=1, types=[int])
         info.set_rule(max=0)
+        stop.set_rule(max=0)
         return parser
 
     async def run(self, args: Message):
@@ -75,5 +77,20 @@ class BotCommandSession(BotCommand):
             tip = f"前台pid: {self.session.curpid}\n\n"
             tip += f"正在运行的命令: \n{json.dumps(cmd_info, indent=2, ensure_ascii=False)}"
             await self.send_msg(tip)
+
+        if subcmd == "stop":
+            curpid = self.session.curpid
+            target = self.session.commands.get(curpid)
+            if target is None:
+                await self.send_msg(f"pid {curpid} 没有正在运行的命令")
+            else:
+                for task in target.run_tasks:
+                    if not task.done():
+                        task.cancel()
+                for task in target.roger_tasks:
+                    if not task.done():
+                        task.cancel()
+                target.unlock()
+                await self.send_msg(f"已停止命令 {target.name} (pid={curpid})")
 
         self.unlock()

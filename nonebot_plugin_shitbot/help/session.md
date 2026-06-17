@@ -14,6 +14,7 @@
 |--------|------|
 | `switch <pid>` | 将前台切换到指定 pid |
 | `info` | 查看当前会话信息 |
+| `stop` | 停止当前会话的前台 pid 中运行的命令 |
 
 ## 说明
 
@@ -35,4 +36,5 @@
 ```bash
 /session switch 3    将前台切换到 pid=3
 /session info        查看所有运行中的命令以及前台对应的 pid
+/session stop        停止当前会话的前台 pid 中运行的命令
 ```

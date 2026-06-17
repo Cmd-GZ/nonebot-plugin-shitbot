@@ -1,15 +1,53 @@
 from __future__ import annotations
 
+import asyncio
+from functools import wraps
 from typing import TYPE_CHECKING
 
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 
+from .aux import rm_path
+from .config import config
 from .msgutils import send_msg
 from .parser import BotArgParser
 from .permissions import permissions
 
 if TYPE_CHECKING:
     from .session import BotSession
+
+
+def _cancellable_run(func):
+    @wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        task = asyncio.current_task()
+        if task is not None:
+            self._run_tasks.add(task)
+        try:
+            return await func(self, *args, **kwargs)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if task is not None:
+                self._run_tasks.discard(task)
+
+    return wrapper
+
+
+def _cancellable_roger(func):
+    @wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        task = asyncio.current_task()
+        if task is not None:
+            self._roger_tasks.add(task)
+        try:
+            return await func(self, *args, **kwargs)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if task is not None:
+                self._roger_tasks.discard(task)
+
+    return wrapper
 
 
 # Base class of all the commands
@@ -27,6 +65,13 @@ class BotCommand:
     _sentinel = object()
     _name = "otherwise"
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if "run" in cls.__dict__:
+            cls.run = _cancellable_run(cls.run)
+        if "roger" in cls.__dict__:
+            cls.roger = _cancellable_roger(cls.roger)
+
     # Use make() instead of this
     def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         if _internal is not self._sentinel:
@@ -36,6 +81,10 @@ class BotCommand:
         self._argv = None
         self._parser = self._init_parser()
         self._pid = _pid
+        self._run_tasks: set[asyncio.Task] = set()
+        self._roger_tasks: set[asyncio.Task] = set()
+        self._inner_tasks: set[asyncio.Task] = set()
+        self._inner_cmds: list[BotCommand] = []
         session.commands[_pid] = self
 
     @classmethod
@@ -71,6 +120,14 @@ class BotCommand:
     @property
     def pid(self):
         return self._pid
+
+    @property
+    def run_tasks(self):
+        return self._run_tasks
+
+    @property
+    def roger_tasks(self):
+        return self._roger_tasks
 
     def _init_parser(self):
         return BotArgParser()
@@ -131,6 +188,20 @@ class BotCommand:
             entry_name, self.session.group_id, self.session.user_id
         )
 
+    def _create_task(self, coro) -> asyncio.Task:
+        task = asyncio.create_task(coro)
+        self._inner_tasks.add(task)
+        task.add_done_callback(self._inner_tasks.discard)
+        return task
+
+    def _rm_cache(self):
+        if not self.session:
+            return
+        cache_path = (
+            config.cache / self.session.group_id / self.session.user_id / str(self._pid)
+        )
+        rm_path(cache_path)
+
     async def roger(self, event: MessageEvent):
         pass
 
@@ -149,6 +220,16 @@ class BotCommand:
     def unlock(self):
         if self._session is None:
             return
+        for task in self._inner_tasks:
+            if not task.done():
+                task.cancel()
+        for cmd in self._inner_cmds:
+            cmd.unlock()
+        self._rm_cache()
         self._session.commands.pop(self._pid, None)
         self._session.release()
         self._session = None
+
+
+BotCommand.run = _cancellable_run(BotCommand.run)
+BotCommand.roger = _cancellable_roger(BotCommand.roger)

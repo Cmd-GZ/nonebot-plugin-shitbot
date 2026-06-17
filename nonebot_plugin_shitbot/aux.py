@@ -6,8 +6,6 @@ from typing import Any
 import httpx
 from nonebot.log import logger
 
-from .config import config
-
 
 def validate_schema(data: Any, schema: Any) -> bool:
     if schema is Any:
@@ -36,19 +34,13 @@ def validate_schema(data: Any, schema: Any) -> bool:
     return False
 
 
-async def rm_path(path: Path):
+def rm_path(path: Path):
     if not path.exists():
         return
     if path.is_dir():
         shutil.rmtree(path)
     if path.is_file():
         path.unlink()
-
-
-async def rm_cache(group_id: str, user_id: str, pid: str):
-    cache_path = config.cache / group_id / user_id / pid
-    await rm_path(cache_path)
-    logger.info(f"已删除缓存: {cache_path}")
 
 
 def get_file_sha256(file_path: Path | str):

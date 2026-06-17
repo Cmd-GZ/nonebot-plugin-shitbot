@@ -1,5 +1,3 @@
-import asyncio
-
 import yaml
 from nonebot import get_driver, on_command, on_message
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
@@ -89,7 +87,7 @@ driver = get_driver()
 
 @driver.on_startup
 async def startup():
-    await rm_path(config.cache)
+    rm_path(config.cache)
     config.cache.mkdir(parents=True, exist_ok=True)
     logger.info("nonebot-plugin-shitbot 已加载")
 
@@ -110,11 +108,22 @@ async def bot_connect(bot: Bot):
 
 @driver.on_shutdown
 async def shutdown():
-    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-    for task in tasks:
-        task.cancel()
-
-    await asyncio.gather(*tasks, return_exceptions=True)
+    commands = [
+        cmd
+        for group_objs in BotSession._objs.values()
+        for session in group_objs.values()
+        for pid, cmd in session.commands.items()
+        if pid >= 0
+    ]
+    for command in commands:
+        for task in command.run_tasks:
+            if not task.done():
+                task.cancel()
+        for task in command.roger_tasks:
+            if not task.done():
+                task.cancel()
+        command.unlock()
+    rm_path(config.cache)
 
 
 # ===Commands handlers=== #

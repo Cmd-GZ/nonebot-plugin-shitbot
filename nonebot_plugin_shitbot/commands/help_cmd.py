@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -33,6 +34,7 @@ class BotCommandHelp(BotCommand):
         parser.add_subparser("pixiv")
         parser.add_subparser("autoreply")
         return parser
+
 
     async def run(self, args: Message):
         if not self.session:
@@ -88,7 +90,11 @@ class BotCommandHelp(BotCommand):
         while _pid in pids:
             _pid -= 1
         md2pic = BotCommandMd2pic.make(self.bot, self.session, _pid=_pid)
+        if md2pic is None:
+            return
         tip = "-c\n" + tip
         msg = Message(tip)
-        await md2pic.run(msg)  # type: ignore
+        inner_task = self._create_task(md2pic.run(msg))
+        self._inner_cmds.append(md2pic)
+        await asyncio.gather(inner_task, return_exceptions=True)
         self.unlock()
