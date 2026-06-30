@@ -9,7 +9,7 @@ if not environ.get("PYTEST_RUNNING"):
     from nonebot.plugin import PluginMetadata
 
     from . import handlers  # noqa: F401
-    from .config import ShitBotConfig
+    from .config import PluginConfig
 
     require("nonebot_plugin_htmlrender")
     require("nonebot_plugin_localstore")
@@ -20,6 +20,6 @@ if not environ.get("PYTEST_RUNNING"):
         usage="发送/help 查看帮助信息",
         type="application",
         homepage="https://github.com/Cmd-GZ/nonebot-plugin-shitbot",
-        config=ShitBotConfig,
+        config=PluginConfig,
         supported_adapters={"~onebot.v11"},
     )
