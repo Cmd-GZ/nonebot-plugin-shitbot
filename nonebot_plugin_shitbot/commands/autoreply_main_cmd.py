@@ -11,6 +11,7 @@ from ..config import config
 from ..msgdatabase import BotMsgDataBase
 from ..session import BotSession
 from ..tasks import autoreply_lock
+from ..permissions import permissions
 
 _TERM_SCHEMA = {
     "trans": [str],
@@ -50,6 +51,9 @@ class BotCommandAutoReplyMain(BotCommand):
         if event.message_type == "private":
             group_id = "private"
         user_id = str(event.user_id)
+
+        if not permissions.check_permission("autoreply", group_id, user_id):
+            return
 
         rule_keys = self._rule.keys()
         raw = event.message.extract_plain_text()

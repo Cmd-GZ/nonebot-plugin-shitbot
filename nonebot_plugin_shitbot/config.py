@@ -118,6 +118,15 @@ _DEFAULT_ENTRIES: dict[str, list] = {
         [],
         ["banned"],
     ],
+    "autoreply": [
+        "是否允许自动回复",
+        True,
+        [],
+        ["banned"],
+        True,
+        [],
+        ["banned"],
+    ],
 }
 
 
