@@ -17,15 +17,6 @@ _DEFAULT_ENTRIES: dict[str, list] = {
         ["setu"],
         ["banned"],
     ],
-    "advrandpic": [
-        "是否允许使用advrandpic命令",
-        False,
-        [],
-        ["banned"],
-        True,
-        ["setu"],
-        ["banned"],
-    ],
     "pixiv": [
         "是否允许使用pixiv命令",
         False,

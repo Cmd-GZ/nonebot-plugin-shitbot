@@ -29,12 +29,10 @@ class BotCommandHelp(BotCommand):
         parser.add_subparser("convert")
         parser.add_subparser("randpic")
         parser.add_subparser("shitpost")
-        parser.add_subparser("advrandpic")
         parser.add_subparser("md2pic")
         parser.add_subparser("pixiv")
         parser.add_subparser("autoreply")
         return parser
-
 
     async def run(self, args: Message):
         if not self.session:
@@ -69,7 +67,6 @@ class BotCommandHelp(BotCommand):
             "convert",
             "randpic",
             "shitpost",
-            "advrandpic",
             "md2pic",
             "pixiv",
             "autoreply",

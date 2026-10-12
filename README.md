@@ -37,8 +37,6 @@
 
 - 添加单元测试 （技术债务这块 最讨厌的一集 想写哪个就写哪个）
 
-- 为 /randpic 实现 -r only 和 -t
-
 - B站视频解析并下载（支持链接块或者BV号）（6.12更新：我鬼脑意淫后越想越觉得写这个好累 所以把优先级后调）
 
 - 为代码添加更多注释和写文档 （依旧技术债务 依旧最烦 依旧随缘）
@@ -89,7 +87,6 @@ nb plugin install nonebot-plugin-shitbot
 | `/perm` | 权限管理 |
 | `/help` | 查看帮助 |
 | `/randpic` | 随机二次元图片 |
-| `/advrandpic` | 高级随机图片 |
 | `/pixiv` | P站图片检索 |
 | `/convert` | 图片格式转换 |
 | `/shitpost` | 搬史 |
@@ -99,7 +96,7 @@ nb plugin install nonebot-plugin-shitbot
 ## 鸣谢
 
 - [ManyACG](https://manyacg.top): 为 /randpic ~~*以及下面的彩蛋*~~ 提供了API
-- [Lolicon APP](https://lolicon.app): 为 /advrandpic 提供了API
+- [Lolicon APP](https://lolicon.app): 为 /randpic 提供了API
 - [github-markdown-css](https://github.com/sindresorhus/github-markdown-css): 为markdown渲染提供了CSS主题
 
 ###### 彩蛋: 千人千面(据说每个人看到的图都不一样): 

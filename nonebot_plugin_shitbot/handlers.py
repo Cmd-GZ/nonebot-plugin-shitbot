@@ -135,9 +135,9 @@ cmd_help = cmd_register("help", BotCommandHelp)
 
 cmd_randpic = cmd_register("randpic", BotCommandRandpic)
 
-cmd_pixiv = cmd_register("pixiv", BotCommandPixiv)
+cmd_涩图 = cmd_register("涩图", BotCommandRandpic)
 
-cmd_advrandpic = cmd_register("advrandpic", BotCommandAdvrandpic)
+cmd_pixiv = cmd_register("pixiv", BotCommandPixiv)
 
 cmd_convert = cmd_register("convert", BotCommandConvert)
 

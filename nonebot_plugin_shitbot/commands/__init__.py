@@ -1,5 +1,4 @@
 from ..command import BotCommand
-from .advrandpic_cmd import BotCommandAdvrandpic
 from .autoreply_cmd import BotCommandAutoreply
 from .autoreply_main_cmd import BotCommandAutoReplyMain
 from .convert_cmd import BotCommandConvert
@@ -13,7 +12,6 @@ from .shitpost_cmd import BotCommandShitpost
 
 __all__ = [
     "BotCommand",
-    "BotCommandAdvrandpic",
     "BotCommandAutoReplyMain",
     "BotCommandAutoreply",
     "BotCommandConvert",
