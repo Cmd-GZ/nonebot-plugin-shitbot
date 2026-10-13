@@ -32,6 +32,7 @@ class BotCommandHelp(BotCommand):
         parser.add_subparser("md2pic")
         parser.add_subparser("pixiv")
         parser.add_subparser("autoreply")
+        parser.add_subparser("bilibili")
         return parser
 
     async def run(self, args: Message):
@@ -70,6 +71,7 @@ class BotCommandHelp(BotCommand):
             "md2pic",
             "pixiv",
             "autoreply",
+            "bilibili",
         ):
             tip = f"错误: 帮助文档 {subcmd}.md 不存在"
             help_path = help_dir / f"{subcmd}.md"

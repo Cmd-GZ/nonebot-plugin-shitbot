@@ -1,6 +1,7 @@
 from ..command import BotCommand
 from .autoreply_cmd import BotCommandAutoreply
 from .autoreply_main_cmd import BotCommandAutoReplyMain
+from .bilibili_cmd import BotCommandBilibili
 from .convert_cmd import BotCommandConvert
 from .help_cmd import BotCommandHelp
 from .md2pic_cmd import BotCommandMd2pic
@@ -14,6 +15,7 @@ __all__ = [
     "BotCommand",
     "BotCommandAutoReplyMain",
     "BotCommandAutoreply",
+    "BotCommandBilibili",
     "BotCommandConvert",
     "BotCommandHelp",
     "BotCommandMd2pic",

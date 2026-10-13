@@ -10,6 +10,8 @@
 
 - 给定 PID 获取P站图片
 
+- B站视频解析与下载
+
 - 半自动搬史
 
 - Markdown渲染
@@ -36,8 +38,6 @@
 ## TODO List（大致按优先级排序 但随缘想先解决哪个就解决哪个）
 
 - 添加单元测试 （技术债务这块 最讨厌的一集 想写哪个就写哪个）
-
-- B站视频解析并下载（支持链接块或者BV号）（6.12更新：我鬼脑意淫后越想越觉得写这个好累 所以把优先级后调）
 
 - 为代码添加更多注释和写文档 （依旧技术债务 依旧最烦 依旧随缘）
 
@@ -89,6 +89,7 @@ nb plugin install nonebot-plugin-shitbot
 | `/randpic` | 随机二次元图片 |
 | `/涩图` | `/randpic` 的别名 |
 | `/pixiv` | P站图片检索 |
+| `/bilibili` | B站视频解析与下载 |
 | `/convert` | 图片格式转换 |
 | `/shitpost` | 搬史 |
 | `/md2pic` | Markdown 渲染为图片 |
@@ -98,6 +99,7 @@ nb plugin install nonebot-plugin-shitbot
 
 - [ManyACG](https://manyacg.top): 为 /randpic ~~*以及下面的彩蛋*~~ 提供了API
 - [Lolicon APP](https://lolicon.app): 为 /randpic 提供了API
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp): 为 /bilibili 提供视频解析与下载
 - [github-markdown-css](https://github.com/sindresorhus/github-markdown-css): 为markdown渲染提供了CSS主题
 
 ###### 彩蛋: 千人千面(据说每个人看到的图都不一样): 

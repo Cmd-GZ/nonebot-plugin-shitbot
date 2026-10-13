@@ -147,6 +147,8 @@ cmd_md2pic = cmd_register("md2pic", BotCommandMd2pic)
 
 cmd_autoreply = cmd_register("autoreply", BotCommandAutoreply)
 
+cmd_bilibili = cmd_register("bilibili", BotCommandBilibili)
+
 cmd_otherwise = cmd_register("", BotCommand, priority=3)
 
 # ===Messages handlers=== #

@@ -118,6 +118,15 @@ _DEFAULT_ENTRIES: dict[str, list] = {
         [],
         ["banned"],
     ],
+    "bilibili": [
+        "是否允许使用bilibili命令",
+        False,
+        [],
+        ["banned"],
+        False,
+        [],
+        ["banned"],
+    ],
 }
 
 

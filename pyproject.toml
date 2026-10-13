@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-shitbot"
-version = "0.6.0"
+version = "0.7.0"
 description = "NoneBot shitpost plugin"
 requires-python = ">=3.10"
 dependencies = [
@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.100",
     "nonebot-plugin-localstore>=0.3.0",
     "PixivPy-Async>=1.2.14",
+    "yt-dlp>=2026.8.19",
     "Pillow>=12.2.0",
     "httpx>=0.28.1",
     "python-magic>=0.4",

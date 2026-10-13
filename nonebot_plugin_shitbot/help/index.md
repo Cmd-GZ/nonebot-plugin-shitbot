@@ -11,6 +11,7 @@
 | `/randpic` | 随机获取二次元图片 |
 | `/涩图` | `/randpic` 的别名 |
 | `/pixiv` | 根据Pixiv ID从P站获取图片 |
+| `/bilibili` | 解析并下载 B 站视频 |
 | `/shitpost` | 将消息转发到多个群聊 |
 | `/md2pic` | 将 markdown 文本转换为图片输出 |
 | `/autoreply` | 自动回复系统管理 |
