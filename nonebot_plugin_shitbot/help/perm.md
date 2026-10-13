@@ -107,4 +107,4 @@
 - `/perm check` 仅需 `perm` 条目权限
 - 除 `check` 外的所有子命令需要 `permmanager` 条目权限，或用户在 `owners` 组中
 - 非 `owners` 组用户无法修改 `admins` 和 `owners` 用户权限组
-- 删除 `owners` 组后原 `owners` 用户将失去对应权限，且不能再通过 `/perm` 恢复，需手动编辑 `config.yaml` 恢复
+- 删除 `owners` 组后原 `owners` 用户将失去对应权限，且不能再通过 `/perm` 恢复，需手动编辑数据目录下的 `permissions/owners.yaml` 恢复

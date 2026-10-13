@@ -7,10 +7,11 @@
 | `/session` | 管理当前会话 |
 | `/perm` | 权限查看与管理 |
 | `/help` | 显示帮助信息 |
-| `/convert` | 收集图片并批量处理后发送（默认仅私聊） |
+| `/convert` | 收集图片并批量处理后发送 |
 | `/randpic` | 随机获取二次元图片 |
+| `/涩图` | `/randpic` 的别名 |
 | `/pixiv` | 根据Pixiv ID从P站获取图片 |
-| `/shitpost` | 将消息转发到多个群聊（默认仅私聊） |
+| `/shitpost` | 将消息转发到多个群聊 |
 | `/md2pic` | 将 markdown 文本转换为图片输出 |
 | `/autoreply` | 自动回复系统管理 |
 

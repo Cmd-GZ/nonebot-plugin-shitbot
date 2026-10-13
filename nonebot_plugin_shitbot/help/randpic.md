@@ -65,7 +65,7 @@
 ```bash
 /randpic                   获取 1 张图片
 /randpic -n 3 -s original -a 2  从 Lolicon API 获取 3 张原图
-/randpic -n 5 -t 萝莉|少女&白丝|黑丝
+/randpic -n 5 -k 萝莉|少女&白丝|黑丝
     获取 (萝莉 或 少女) 且 (白丝 或 黑丝) 的图片，共 5 张
 ```
 

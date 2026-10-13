@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING, Any
 
 import httpx
-import random
-
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
 
@@ -158,7 +157,13 @@ class BotCommandRandpic(BotCommand):
             self._size = "regular"
 
         self._keyword = self._parser.opts_value["-k"][0]
-        if self._keyword.replace(" ", "").replace(",", "").replace("|", "").replace("&", "") == "":
+        if (
+            self._keyword.replace(" ", "")
+            .replace(",", "")
+            .replace("|", "")
+            .replace("&", "")
+            == ""
+        ):
             self._keyword = ""
 
         pics = await self._get_pics()

@@ -159,6 +159,7 @@
 ## 注意
 
 - 使用该命令需要 `autoreplymanager` 条目权限
+- 自动回复默认在 bot 启动时开启
 - `reply` 收集与存储的消息仅支持文字、图片和表情
 - `reply start` 和 `reply stop` 需要在目标回复已通过 `create` 创建后使用
 - `reply modify` 仅在目标回复已被设置内容后可用

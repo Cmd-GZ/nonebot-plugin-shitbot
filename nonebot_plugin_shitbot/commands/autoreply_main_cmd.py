@@ -9,9 +9,9 @@ from ..aux import validate_schema
 from ..command import BotCommand
 from ..config import config
 from ..msgdatabase import BotMsgDataBase
+from ..permissions import permissions
 from ..session import BotSession
 from ..tasks import autoreply_lock
-from ..permissions import permissions
 
 _TERM_SCHEMA = {
     "trans": [str],

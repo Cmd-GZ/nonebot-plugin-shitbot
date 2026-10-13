@@ -175,6 +175,8 @@ class BotCommandMd2pic(BotCommand):
         )
         self._md = self._parser.value[0]
 
+        self._scale = max(1, self._scale)
+        self._scale = min(50, self._scale)
         self._padding = max(0, self._padding)
         self._padding = min(50, self._padding)
         self._max_w = min(10000000, self._max_w)

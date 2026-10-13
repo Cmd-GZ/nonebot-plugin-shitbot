@@ -23,13 +23,13 @@
 - 信息处理函数库(msgutils) 涵盖对信息对象的转换、处理、发送 运用函数式方案处理信息
 
 - 手搓信息管理数据库
-  - 数据库由两部分组成: messages以及medias
-  - messages用于存储信息 通过将 Message 转化为 DumpedMsg 后以 yaml 格式存储
+  - 数据库由两部分组成: msgs以及medias
+  - msgs用于存储信息 通过将 Message 转化为 DumpedMsg 后以 yaml 格式存储
     -  文件名为该文件的sha256sum值 通过比较文件名去重
-    -  维护一个映射表（的yaml文件） 用于记录信息的引用数（由数据库用户维护） 通常若元信息的引用数为0 则删除元信息
-  - medias用于messages中信息中可能存在的多媒体文件
+    -  维护一个映射表（的yaml文件） 用于记录信息的引用数（由数据库用户维护） 通常若信息的引用数为0 则删除信息
+  - medias用于msgs中信息中可能存在的多媒体文件
     -  文件名为该文件的sha256sum值 通过比较文件名去重
-    -  维护一个映射表（的yaml文件） 用于记录文件的引用数（只会被messages中的信息引用 因此仅由数据库本身维护） 通常若元信息的引用数为0 则删除元信息
+    -  维护一个映射表（的yaml文件） 用于记录文件的引用数（只会被msgs中的信息引用 因此仅由数据库本身维护） 通常若文件的引用数为0 则删除文件
 
 - 自动回复系统
 
@@ -75,7 +75,7 @@ nb plugin install nonebot-plugin-shitbot
 |---|---|---|---|---|
 | `SHITBOT__CLIENT_CACHE` | 路径 | 本地缓存路径 | 否 | 容器端缓存路径。本地缓存路径为 `$LOCALSTORE_CACHE_DIR/nonebot_plugin_shitbot`，容器端需对应挂载 |
 | `SHITBOT__CLIENT_DATA` | 路径 | 本地数据路径 | 否 | 容器端数据路径。本地数据路径为 `$LOCALSTORE_DATA_DIR/nonebot_plugin_shitbot`，容器端需对应挂载 |
-| `SHITBOT__OWNERS` | JSON 字符串列表 | None | 是 | 机器人所有者 QQ 号列表，如 `'["114514"]'` |
+| `SHITBOT__OWNERS` | JSON 字符串列表 | None | 否（强烈建议） | 机器人所有者 QQ 号列表，如 `'["114514"]'`。未配置时 owners 组为空 |
 | `SHITBOT__MAX_MESSAGE_DEPTH` | 整数 | `16` | 否 | 消息解析最大递归深度 |
 | `SHITBOT__PIXIV_ACCESS_TOKEN` | 字符串 | "" | 部分必填 | Pixiv API 访问令牌（使用 `/pixiv` 时必填） |
 
@@ -87,6 +87,7 @@ nb plugin install nonebot-plugin-shitbot
 | `/perm` | 权限管理 |
 | `/help` | 查看帮助 |
 | `/randpic` | 随机二次元图片 |
+| `/涩图` | `/randpic` 的别名 |
 | `/pixiv` | P站图片检索 |
 | `/convert` | 图片格式转换 |
 | `/shitpost` | 搬史 |
