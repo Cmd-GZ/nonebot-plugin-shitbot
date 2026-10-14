@@ -14,10 +14,13 @@ from .msgutils import (
     DumpedMsg,
     DumpedSeg,
     modify_msg_data,
+    msg_filter,
     msg_foldl,
     msg_map,
     undump_message,
 )
+
+_MEDIA_NONE = "//NOTHING//"
 
 
 class BotMsgDataBase:
@@ -51,11 +54,10 @@ class BotMsgDataBase:
             if seg["type"] not in ["image", "video", "file", "record"]:
                 return acc
             url = seg["data"].get("url", "")
-            file = seg["data"].get("file", "")
             if url:
                 acc.append(("url", url))
-            elif file:
-                acc.append(("file", file))
+                return acc
+            acc.append(("file", seg["data"].get("file") or _MEDIA_NONE))
             return acc
 
         return msg_foldl(_f, [], msg)
@@ -230,22 +232,42 @@ class BotMsgDataBase:
                     medias.append(term)
                     continue
                 temp_path = download_dir / uuid.uuid4().hex
-                await stuff_download(client, term, temp_path)
-                name = get_file_sha256(temp_path)
-                medias.append(name)
-                if save_media:
-                    self._save_media(temp_path)
-                temp_path.unlink(missing_ok=True)
+                try:
+                    await stuff_download(client, term, temp_path)
+                    name = get_file_sha256(temp_path)
+                    medias.append(name)
+                    if save_media:
+                        self._save_media(temp_path)
+                    temp_path.unlink(missing_ok=True)
+                except Exception:
+                    temp_path.unlink(missing_ok=True)
+                    medias.append(_MEDIA_NONE)
 
         storable = modify_msg_data(
             msg,
             {"url": DELETE, "file": DataVariables(medias)},
             ["image", "video", "file", "record"],
         )
+
+        def _filter(seg: DumpedSeg) -> bool:
+            if seg["type"] in ["image", "video", "file", "record"]:
+                return seg["data"].get("file", _MEDIA_NONE) != _MEDIA_NONE
+            if seg["type"] in ["node", "reply", "forward"] and not seg["data"].get(
+                "content"
+            ):
+                return False
+            return True
+
+        for _ in range(config.max_message_depth + 1):
+            storable = msg_filter(_filter, storable)
+
         msg = modify_msg_data(
             storable, {"summary": DELETE, "sub_type": DELETE}, ["image"]
         )
         msg = modify_msg_data(msg, {"user_id": DELETE, "nickname": DELETE}, ["node"])
+
+        if not msg:
+            return [], "", []
 
         msg_temp_dir = self._cache_dir / "msg"
         msg_temp_dir.mkdir(parents=True, exist_ok=True)
@@ -257,13 +279,16 @@ class BotMsgDataBase:
 
     async def has_msg(self, msg: DumpedMsg) -> str | None:
         _, name, _ = await self._normalize_msg(msg, save_media=False)
-        if self.get_msg(name):
+        if name and self.get_msg(name):
             return name
         return None
 
-    async def save_msg(self, msg: DumpedMsg, *, cover: bool = True) -> Path:
+    async def save_msg(self, msg: DumpedMsg, *, cover: bool = True) -> Path | None:
         medias, name, storable = await self._normalize_msg(msg, save_media=True)
         old_medias_raw: list[tuple[str, str]] = []
+
+        if not storable:
+            return None
 
         msg_path = self._msgs_dir / name
         if msg_path.exists():
@@ -272,13 +297,14 @@ class BotMsgDataBase:
             old_msg = yaml.safe_load(msg_path.read_text(encoding="utf-8"))
             old_medias_raw = self._get_multimedias_stuff(old_msg)
             for _, media in old_medias_raw:
-                if media != "":
+                if media != _MEDIA_NONE:
                     self._dec_media_rc(media)
 
         for media in medias:
-            self._inc_media_rc(media)
+            if media != _MEDIA_NONE:
+                self._inc_media_rc(media)
         for _, media in old_medias_raw:
-            if media != "":
+            if media != _MEDIA_NONE:
                 self._del_media(media)
 
         self._update_rc()
@@ -298,7 +324,7 @@ class BotMsgDataBase:
 
         medias_raw = self._get_multimedias_stuff(msg)
         for _, media in medias_raw:
-            if media == "":
+            if media == _MEDIA_NONE:
                 continue
             self._dec_media_rc(media)
             self._del_media(media)

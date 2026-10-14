@@ -95,6 +95,8 @@ class BotCommandAutoreply(BotCommand):
 
         filtered_msg = msg_filter(_filter, self._temp_msg)
         msg_path = await self._database.save_msg(filtered_msg)
+        if msg_path is None:
+            raise ValueError(f"回复 {reply} 无可存储内容（可能所有媒体下载失败）")
         msg_hash = msg_path.name
         self._msg_table[reply] = msg_hash
         self._database.inc_msg_rc(msg_hash)
@@ -319,7 +321,11 @@ class BotCommandAutoreply(BotCommand):
                 if reply in self._msg_table:
                     await self.send_msg(f"警告: 回复 {reply} 已存在")
                     continue
-                await self._set_reply(reply)
+                try:
+                    await self._set_reply(reply)
+                except ValueError:
+                    await self.send_msg(f"警告: 回复 {reply} 创建失败")
+                    continue
             await self.send_msg("创建成功")
 
         self.unlock()
@@ -363,7 +369,13 @@ class BotCommandAutoreply(BotCommand):
                 self.unlock()
                 return
             async with autoreply_lock:
-                await self._set_reply(reply_name)
+                try:
+                    await self._set_reply(reply_name)
+                except ValueError:
+                    await self.send_msg("设置失败")
+                    self._temp_msg = []
+                    self.unlock()
+                    return
                 self._temp_msg = []
             await self.send_msg("设置成功")
             self.unlock()
@@ -387,7 +399,13 @@ class BotCommandAutoreply(BotCommand):
                 },
                 ["image"],
             )
-            await self._set_reply(reply_name)
+            try:
+                await self._set_reply(reply_name)
+            except ValueError:
+                await self.send_msg("修改失败")
+                self._temp_msg = []
+                self.unlock()
+                return
             self._temp_msg = []
         await self.send_msg("修改成功")
         self.unlock()
