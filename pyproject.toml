@@ -2,7 +2,7 @@
 name = "nonebot-plugin-shitbot"
 version = "0.7.0"
 description = "NoneBot shitpost plugin"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "nonebot2>=2.5.0",
     "nonebot-adapter-onebot>=2.4.6",

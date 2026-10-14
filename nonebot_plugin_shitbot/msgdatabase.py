@@ -313,7 +313,7 @@ class BotMsgDataBase:
         )
 
         def _map(seg: DumpedSeg) -> DumpedSeg:
-            if seg["type"] == "image":
+            if seg["type"] in ["image", "video", "file", "record"]:
                 seg["data"]["file"] = (
                     f"file://{contain_medias_dir / seg['data']['file']!s}"
                 )

@@ -7,7 +7,6 @@ if TYPE_CHECKING:
 
 
 class BotSession:
-    _commands: dict[int, BotCommand]
     _objs: dict[str, dict[str, BotSession]] = {}
     _sentinel = object()
 
@@ -15,8 +14,10 @@ class BotSession:
     def __init__(self, group_id: str, user_id: str, *, _internal=None):
         if _internal is not self._sentinel:
             raise TypeError("Please use BotSession.make() instead of BotSession()")
-        self._commands = {}  # pid > 0: user command; pid = 0: session manager: pid < 0: command-called command
-        self._curpid = 1  # So _curpid should be greater than 0
+        self._commands: dict[
+            int, BotCommand
+        ] = {}  # pid > 0: user command; pid = 0: session manager: pid < 0: command-called command
+        self._curpid = 1  # _curpid should be greater than 0
         self._group_id = group_id
         self._user_id = user_id
 
@@ -24,6 +25,14 @@ class BotSession:
         if not isinstance(other, BotSession):
             return NotImplemented
         return self.group_id == other.group_id and self.user_id == other.user_id
+
+    @classmethod
+    def get_sessions(cls) -> list[BotSession]:
+        return [
+            session
+            for group_objs in cls._objs.values()
+            for session in group_objs.values()
+        ]
 
     @classmethod
     def make(cls, group_id: str, user_id: str) -> BotSession:

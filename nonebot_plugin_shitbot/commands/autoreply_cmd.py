@@ -21,10 +21,10 @@ from .autoreply_main_cmd import BotCommandAutoReplyMain
 
 class BotCommandAutoreply(BotCommand):
     _name = "autoreply"
-    _autoreply_dir = BotCommandAutoReplyMain._autoreply_dir
-    _state_path = BotCommandAutoReplyMain._state_path
-    _rule_path = BotCommandAutoReplyMain._rule_path
-    _msg_table_path = BotCommandAutoReplyMain._msg_table_path
+    _autoreply_dir = BotCommandAutoReplyMain.autoreply_dir
+    _state_path = BotCommandAutoReplyMain.state_path
+    _rule_path = BotCommandAutoReplyMain.rule_path
+    _msg_table_path = BotCommandAutoReplyMain.msg_table_path
 
     def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         super().__init__(bot, session, _pid=_pid, _internal=_internal)

@@ -6,7 +6,7 @@ from nonebot.adapters.onebot.v11 import Bot, Message
 
 from ..command import BotCommand
 from ..parser import BotArgParser
-from ..permissions import permissions
+from ..permissions import get_permissions
 
 if TYPE_CHECKING:
     from ..session import BotSession
@@ -113,6 +113,7 @@ class BotCommandPerm(BotCommand):
     async def _check(self):
         if self.session is None:
             return
+        permissions = get_permissions()
         keys = permissions.entries.keys()
         tip = "权限状态概览:\n"
         tip += f"用户ID: {self.session.user_id}, 群组ID: {self.session.group_id}\n"
@@ -131,6 +132,7 @@ class BotCommandPerm(BotCommand):
     async def _list(self):
         if self.session is None:
             return
+        permissions = get_permissions()
         keys = []
         tip = ""
         dic = {}
@@ -157,6 +159,7 @@ class BotCommandPerm(BotCommand):
     async def _info(self):
         if self.session is None:
             return
+        permissions = get_permissions()
         tip = "权限元素信息:\n"
         for title, elems, elemsdic in (
             ("用户权限组:\n", self._U, permissions.users),
@@ -171,6 +174,7 @@ class BotCommandPerm(BotCommand):
     async def _perm_group(self, mode: str):
         if self.session is None or mode not in ["create", "delete"]:
             return
+        permissions = get_permissions()
         verb = "创建" if mode == "create" else "删除"
         flag = False if mode == "create" else True
         ptcl = "已" if mode == "create" else "不"
@@ -202,6 +206,7 @@ class BotCommandPerm(BotCommand):
     async def _perm_mem(self, mode: str):
         if self.session is None or mode not in ["add", "remove"]:
             return
+        permissions = get_permissions()
         verb = "添加" if mode == "add" else "移除"
         flag = False if mode == "add" else True
         ptcl = "已" if mode == "add" else "不"
@@ -246,6 +251,7 @@ class BotCommandPerm(BotCommand):
     async def _whitelist(self):
         if self.session is None:
             return
+        permissions = get_permissions()
         try:
             is_edited = False
             for key in self._entries:
@@ -263,6 +269,7 @@ class BotCommandPerm(BotCommand):
     async def _perm_entry(self, mode: str):
         if self.session is None or mode not in ["whites", "blacks"]:
             return
+        permissions = get_permissions()
         adj = "白" if mode == "whites" else "黑"
 
         def _op(flag: bool, list: list, elem: str):
@@ -300,6 +307,7 @@ class BotCommandPerm(BotCommand):
         if not self.session:
             return
 
+        permissions = get_permissions()
         new_argv = args.extract_plain_text().strip().split()
         if not await self._legal_case(new_argv):
             if self._argv is None:
@@ -330,19 +338,19 @@ class BotCommandPerm(BotCommand):
             return
 
         subparser = self._parser.subparsers[subcmd]
-        _t = subparser._opts_value.get("-t", [self._t])[0]
+        _t = subparser.opts_value.get("-t", [self._t])[0]
         if _t == "user" or _t == "group":
             self._t = _t + "s"
         if _t == "entry":
             self._t = "entries"
 
-        if subparser._opts_value.get("--all", [0])[0]:
+        if subparser.opts_value.get("--all", [0])[0]:
             self._all = True
-        self._U = subparser._opts_value.get("-U", self._U)
-        self._G = subparser._opts_value.get("-G", self._G)
-        self._E = subparser._opts_value.get("-E", self._E)
-        self._u = subparser._opts_value.get("-u", self._u)
-        self._g = subparser._opts_value.get("-g", self._g)
+        self._U = subparser.opts_value.get("-U", self._U)
+        self._G = subparser.opts_value.get("-G", self._G)
+        self._E = subparser.opts_value.get("-E", self._E)
+        self._u = subparser.opts_value.get("-u", self._u)
+        self._g = subparser.opts_value.get("-g", self._g)
 
         subsubcmd = None
         if subcmd == "entry":

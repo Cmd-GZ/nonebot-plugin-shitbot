@@ -208,4 +208,11 @@ class BotPermissions:
         return self.precheck_permission(entry_name, group_id, user_id)
 
 
-permissions = BotPermissions.make()
+_permissions: BotPermissions | None = None
+
+
+def get_permissions() -> BotPermissions:
+    global _permissions
+    if _permissions is None:
+        _permissions = BotPermissions.make()
+    return _permissions

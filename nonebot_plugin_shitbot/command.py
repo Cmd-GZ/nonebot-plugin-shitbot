@@ -10,7 +10,7 @@ from .aux import rm_path
 from .config import config
 from .msgutils import send_msg
 from .parser import BotArgParser
-from .permissions import permissions
+from .permissions import get_permissions
 
 if TYPE_CHECKING:
     from .session import BotSession
@@ -184,7 +184,7 @@ class BotCommand:
     def _check_perm(self, entry_name: str):
         if not self.session:
             return False
-        return permissions.check_permission(
+        return get_permissions().check_permission(
             entry_name, self.session.group_id, self.session.user_id
         )
 

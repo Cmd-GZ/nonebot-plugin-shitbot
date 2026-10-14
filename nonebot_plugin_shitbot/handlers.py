@@ -110,8 +110,7 @@ async def bot_connect(bot: Bot):
 async def shutdown():
     commands = [
         cmd
-        for group_objs in BotSession._objs.values()
-        for session in group_objs.values()
+        for session in BotSession.get_sessions()
         for pid, cmd in session.commands.items()
         if pid >= 0
     ]

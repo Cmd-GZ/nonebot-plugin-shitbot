@@ -18,10 +18,12 @@ async def prod_cons(
     *args,
     **kwargs,
 ):
-    while True:
-        item = await inputs.get()
-        if isinstance(item, EndOfQueue):
-            await outputs.put(EndOfQueue())
-            break
-        result = await func(item, *args, **kwargs)
-        await outputs.put(result)
+    try:
+        while True:
+            item = await inputs.get()
+            if isinstance(item, EndOfQueue):
+                break
+            result = await func(item, *args, **kwargs)
+            await outputs.put(result)
+    finally:
+        await outputs.put(EndOfQueue())

@@ -159,9 +159,9 @@ class BotCommandShitpost(BotCommand):
             return
 
         if subcmd == "start":
-            groups = self._parser._subparsers[subcmd].value
-            self._min = self._parser._subparsers[subcmd].opts_value["--min"][0]
-            self._max = self._parser._subparsers[subcmd].opts_value["--max"][0]
+            groups = self._parser.subparsers[subcmd].value
+            self._min = self._parser.subparsers[subcmd].opts_value["--min"][0]
+            self._max = self._parser.subparsers[subcmd].opts_value["--max"][0]
             self._min = max(0, self._min)
             self._max = max(0, self._max)
             exist_groups = await self.bot.get_group_list()

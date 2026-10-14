@@ -9,7 +9,7 @@ from ..aux import validate_schema
 from ..command import BotCommand
 from ..config import config
 from ..msgdatabase import BotMsgDataBase
-from ..permissions import permissions
+from ..permissions import get_permissions
 from ..session import BotSession
 from ..tasks import autoreply_lock
 
@@ -24,10 +24,10 @@ _TERM_SCHEMA = {
 
 class BotCommandAutoReplyMain(BotCommand):
     _name = "autoreply_main_rec"
-    _autoreply_dir = config.data / "autoreply"
-    _state_path = _autoreply_dir / "state.yaml"
-    _rule_path = _autoreply_dir / "rule.yaml"
-    _msg_table_path = _autoreply_dir / "msg_table.yaml"
+    autoreply_dir = config.data / "autoreply"
+    state_path = autoreply_dir / "state.yaml"
+    rule_path = autoreply_dir / "rule.yaml"
+    msg_table_path = autoreply_dir / "msg_table.yaml"
     _rule: dict[str, dict[str, Any]]
     _msg_table: dict[str, str]
 
@@ -35,10 +35,10 @@ class BotCommandAutoReplyMain(BotCommand):
         super().__init__(bot, session, _pid=_pid, _internal=_internal)
 
     def load_meta(self):
-        if not self._rule_path.exists() or not self._msg_table_path.exists():
+        if not self.rule_path.exists() or not self.msg_table_path.exists():
             raise FileNotFoundError
-        _rule = yaml.safe_load(self._rule_path.read_text(encoding="utf-8"))
-        _msg_table = yaml.safe_load(self._msg_table_path.read_text(encoding="utf-8"))
+        _rule = yaml.safe_load(self.rule_path.read_text(encoding="utf-8"))
+        _msg_table = yaml.safe_load(self.msg_table_path.read_text(encoding="utf-8"))
         if (_rule is not None and not isinstance(_rule, dict)) or (
             _msg_table is not None and not isinstance(_msg_table, dict)
         ):
@@ -52,7 +52,7 @@ class BotCommandAutoReplyMain(BotCommand):
             group_id = "private"
         user_id = str(event.user_id)
 
-        if not permissions.check_permission("autoreply", group_id, user_id):
+        if not get_permissions().check_permission("autoreply", group_id, user_id):
             return
 
         rule_keys = self._rule.keys()
@@ -97,8 +97,8 @@ class BotCommandAutoReplyMain(BotCommand):
     async def run(self, args: Message):
         random.seed()
         async with autoreply_lock:
-            self._database = BotMsgDataBase(self._autoreply_dir)
-            self._state_path.touch(exist_ok=True)
-            self._rule_path.touch(exist_ok=True)
-            self._msg_table_path.touch(exist_ok=True)
+            self._database = BotMsgDataBase(self.autoreply_dir)
+            self.state_path.touch(exist_ok=True)
+            self.rule_path.touch(exist_ok=True)
+            self.msg_table_path.touch(exist_ok=True)
             self.load_meta()

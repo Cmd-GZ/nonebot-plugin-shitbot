@@ -63,8 +63,8 @@ class BotCommandRandpic(BotCommand):
         elif self._api == self._apis[1]:
             payload["num"] = self._num
             payload["size"] = self._size
-            tag = self._keyword.split("&")
-            if tag:
+            if self._keyword:
+                tag = self._keyword.split("&")
                 payload["tag"] = tag
 
         async with httpx.AsyncClient(timeout=30.0) as client:
