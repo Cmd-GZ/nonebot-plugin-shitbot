@@ -349,6 +349,7 @@ class BotCommandAutoreply(BotCommand):
     async def _reply_start(self, reply_name: str):
         if reply_name not in self._msg_table:
             await self.send_msg(f"警告: 回复信息 {reply_name} 不存在")
+            self.unlock()
             return
         self._rstate = "start"
         self._reply_name = reply_name
@@ -360,6 +361,7 @@ class BotCommandAutoreply(BotCommand):
     async def _reply_stop(self, reply_name: str):
         if reply_name not in self._msg_table:
             await self.send_msg(f"警告: 回复信息 {reply_name} 不存在")
+            self.unlock()
             return
         self._rstate = "stop"
         self._is_accept_msg = False
@@ -384,6 +386,7 @@ class BotCommandAutoreply(BotCommand):
         reply_hash = self._msg_table.get(reply_name, "")
         if reply_hash == "":
             await self.send_msg(f"警告: 回复信息 {reply_name} 不存在或未设置")
+            self.unlock()
             return
         async with autoreply_lock:
             self._temp_msg = self._database.get_msg(reply_hash)

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import io
+import uuid
+import httpx
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from nonebot import require
+from nonebot.log import logger
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from PIL import Image
 
@@ -13,6 +16,8 @@ from nonebot_plugin_htmlrender import md_to_pic
 
 from ..command import BotCommand
 from ..parser import BotArgParser
+from ..config import config
+from ..aux import stuff_download
 
 if TYPE_CHECKING:
     from ..session import BotSession
@@ -34,7 +39,7 @@ class BotCommandMd2pic(BotCommand):
 
     def _init_parser(self):
         parser = BotArgParser()
-        parser.set_rule(min=1, max=1)
+        parser.set_rule(min=0, max=1)
         parser.add_opt("-c", necessary=True)
         parser.add_opt("-s", required=True, type=float, default=[2])
         parser.add_opt(
@@ -50,6 +55,42 @@ class BotCommandMd2pic(BotCommand):
         parser.add_opt("--max_h", required=True, type=int, default=[])
 
         return parser
+
+    async def _process_reply(self, args: Message):
+        if not self.session:
+            return
+        if not args or args[0].type != "reply":
+            return
+        reply = {"message": []}
+        try:
+            reply = await self.bot.get_msg(message_id=args[0].data["id"])
+        except Exception as e:
+            logger.error(f"获取回复消息失败: {e}")
+            return
+        for seg in reversed(reply["message"]):
+            if seg.get("type") == "text":
+                self._md = self._md + seg["data"]["text"]
+        if reply["message"] and reply["message"][0].get("type") == "file":
+            url = reply["message"][0]["data"].get("url", "")
+            file_dir = (
+                config.cache
+                / self.session.group_id
+                / self.session.user_id
+                / str(self._pid)
+                / "files"
+            )
+            file_dir.mkdir(parents=True, exist_ok=True)
+            file_path = file_dir / f"{uuid.uuid4().hex}"
+            try:
+                async with httpx.AsyncClient() as client:
+                    await stuff_download(client, url, file_path)
+            except Exception as e:
+                logger.error(f"下载文件失败: {e}")
+                return
+            import magic
+            mine = magic.from_file(file_path, mime=True)
+            if mine == "text/plain":
+                self._md = self._md + file_path.read_text()
 
     async def _render(self) -> bytes:
 
@@ -137,14 +178,10 @@ class BotCommandMd2pic(BotCommand):
     async def run(self, args: Message):
         if not self.session:
             return
+
         new_argss = args.extract_plain_text().split("\n", 1)
-        if len(new_argss) < 2:
-            await self._send_format_error()
-            if self._argv is None:
-                self.unlock()
-            return
         new_argv = new_argss[0].strip().split()
-        new_argv.append(new_argss[1])
+        new_argv.append(new_argss[1]) if len(new_argss) > 1 else new_argv.append("")
         if not await self._legal_case(new_argv):
             if self._argv is None:
                 self.unlock()
@@ -173,7 +210,7 @@ class BotCommandMd2pic(BotCommand):
             if len(self._parser.opts_value["--max_h"]) > 0
             else None
         )
-        self._md = self._parser.value[0]
+        self._md += self._parser.value[0]
 
         self._scale = max(1, self._scale)
         self._scale = min(50, self._scale)
@@ -189,6 +226,12 @@ class BotCommandMd2pic(BotCommand):
             self._min_h = min(self._max_h, self._min_h)
         self._min_h = max(0, self._min_h)
 
+        await self._process_reply(args)
+
+        if not self._md:
+            await self.send_msg("未检测到有效文本")
+            self.unlock()
+            return
         img = await self._render()
 
         msg = Message(MessageSegment.image(img))

@@ -15,7 +15,6 @@ from .session import BotSession
 def collect_class_hierarchy(cls: type):
     registry = [cls]
     for subclass in cls.__subclasses__():
-        registry.append(subclass)
         registry.extend(collect_class_hierarchy(subclass))
     return registry
 
