@@ -34,8 +34,21 @@ class BotCommandAutoReplyMain(BotCommand):
     def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         super().__init__(bot, session, _pid=_pid, _internal=_internal)
 
+    @classmethod
+    async def init(cls):
+        cls._database = BotMsgDataBase(cls.autoreply_dir)
+        cls._rule = {}
+        cls._msg_table = {}
+        cls.state_path.touch(exist_ok=True)
+        cls.rule_path.touch(exist_ok=True)
+        cls.msg_table_path.touch(exist_ok=True)
+
     def load_meta(self):
-        if not self.rule_path.exists() or not self.msg_table_path.exists():
+        if (
+            not self.rule_path.exists()
+            or not self.msg_table_path.exists()
+            or not self.state_path.exists()
+        ):
             raise FileNotFoundError
         _rule = yaml.safe_load(self.rule_path.read_text(encoding="utf-8"))
         _msg_table = yaml.safe_load(self.msg_table_path.read_text(encoding="utf-8"))
@@ -97,8 +110,5 @@ class BotCommandAutoReplyMain(BotCommand):
     async def run(self, args: Message):
         random.seed()
         async with autoreply_lock:
-            self._database = BotMsgDataBase(self.autoreply_dir)
-            self.state_path.touch(exist_ok=True)
-            self.rule_path.touch(exist_ok=True)
-            self.msg_table_path.touch(exist_ok=True)
+            await self.init()
             self.load_meta()

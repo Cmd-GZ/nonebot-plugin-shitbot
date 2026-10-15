@@ -266,7 +266,7 @@ async def send_msg(
         )
     except Exception as e:
         logger.error(f"发送消息失败: {e}")
-        #raise
+        raise
 
 
 def _msg_walk_children(seg: DumpedSeg) -> DumpedMsg | None:

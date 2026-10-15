@@ -2,22 +2,22 @@ from __future__ import annotations
 
 import io
 import uuid
-import httpx
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from nonebot import require
-from nonebot.log import logger
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
+from nonebot.log import logger
 from PIL import Image
 
 require("nonebot_plugin_htmlrender")
 from nonebot_plugin_htmlrender import md_to_pic
 
-from ..command import BotCommand
-from ..parser import BotArgParser
-from ..config import config
 from ..aux import stuff_download
+from ..command import BotCommand
+from ..config import config
+from ..parser import BotArgParser
 
 if TYPE_CHECKING:
     from ..session import BotSession
@@ -88,6 +88,7 @@ class BotCommandMd2pic(BotCommand):
                 logger.error(f"下载文件失败: {e}")
                 return
             import magic
+
             mine = magic.from_file(file_path, mime=True)
             if mine == "text/plain":
                 self._md = self._md + file_path.read_text()

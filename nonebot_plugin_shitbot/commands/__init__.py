@@ -10,6 +10,7 @@ from .pixiv_cmd import BotCommandPixiv
 from .randpic_cmd import BotCommandRandpic
 from .session_cmd import BotCommandSession
 from .shitpost_cmd import BotCommandShitpost
+from .shitpost_main_cmd import BotCommandShitPostMain
 
 __all__ = [
     "BotCommand",
@@ -23,5 +24,6 @@ __all__ = [
     "BotCommandPixiv",
     "BotCommandRandpic",
     "BotCommandSession",
+    "BotCommandShitPostMain",
     "BotCommandShitpost",
 ]

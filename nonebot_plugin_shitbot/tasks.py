@@ -5,6 +5,7 @@ from collections.abc import Coroutine
 from typing import Callable
 
 autoreply_lock = asyncio.Lock()
+shitpost_lock = asyncio.Lock()
 
 
 class EndOfQueue:

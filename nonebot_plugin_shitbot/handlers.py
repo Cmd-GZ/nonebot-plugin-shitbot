@@ -10,6 +10,7 @@ from .commands import *
 from .config import config
 from .msgutils import get_reply
 from .session import BotSession
+from .tasks import autoreply_lock, shitpost_lock
 
 
 def collect_class_hierarchy(cls: type):
@@ -93,16 +94,28 @@ async def startup():
 
 @driver.on_bot_connect
 async def bot_connect(bot: Bot):
+    async with autoreply_lock:
+        await BotCommandAutoReplyMain.init()
+    async with shitpost_lock:
+        await BotCommandShitPostMain.init()
     autoreply_auto_path = config.data / "autoreply" / "state.yaml"
+    is_auto = True
     if autoreply_auto_path.exists():
         is_auto = yaml.safe_load(autoreply_auto_path.read_text(encoding="utf-8"))
-        if is_auto == False:  # is_auto is None means True
-            return
-    session = BotSession.make("public", "autoreply")
-    autoreply_main = BotCommandAutoReplyMain.make(bot, session, _pid=session.curpid)
-    if autoreply_main is None:
-        return
-    await autoreply_main.run(Message())
+    if is_auto:
+        session = BotSession.make("public", "autoreply")
+        autoreply_main = BotCommandAutoReplyMain.make(bot, session, _pid=session.curpid)
+        if autoreply_main is not None:
+            await autoreply_main.run(Message())
+
+    shitpost_setting_path = config.data / "shitpost" / "setting.yaml"
+    if shitpost_setting_path.exists():
+        settings = yaml.safe_load(shitpost_setting_path.read_text(encoding="utf-8"))
+        if settings is not None and settings["is_auto"]:
+            session = BotSession.make("public", "shitpost")
+            shitpost_main = BotCommandShitPostMain.make(bot, session, _pid=session.curpid)
+            if shitpost_main is not None:
+                await shitpost_main.run(Message())
 
 
 @driver.on_shutdown
