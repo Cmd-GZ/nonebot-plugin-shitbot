@@ -1,4 +1,5 @@
 import hashlib
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -86,3 +87,7 @@ async def stuff_download(
     except Exception as e:
         logger.error(f"下载 {url} 失败: {e}")
         raise
+
+
+def is_sha256(name: str) -> bool:
+    return bool(re.fullmatch(r"[0-9a-f]{64}", name))

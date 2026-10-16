@@ -87,7 +87,18 @@ class BotCommandShitPostMain(BotCommand):
             self._setting = _setting
             self.sync_senders()
 
-    def load_meta(self, sha256s: list[str] | None = None) -> None:
+    def _load_meta(self, path: Path) -> None:
+        if not path.exists():
+            return
+        try:
+            _meta = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if not validate_schema(_meta, _META_SCHEMA):
+                return
+            self._metas[path.name] = _meta
+        except Exception as e:
+            logger.error(f"读取 {path} 失败: {e}")
+
+    def load_metas(self, sha256s: list[str] | None = None) -> None:
         if not self.meta_dir.exists():
             raise FileNotFoundError
 
@@ -97,17 +108,7 @@ class BotCommandShitPostMain(BotCommand):
             else self.meta_dir.iterdir()
         )
         for path in paths:
-            if not path.exists():
-                continue
-            try:
-                _meta = yaml.safe_load(path.read_text(encoding="utf-8"))
-                if not validate_schema(_meta, _META_SCHEMA):
-                    continue
-                self._metas[path.name] = _meta
-            except Exception as e:
-                logger.error(f"读取 {path} 失败: {e}")
-                continue
-
+            self._load_meta(path)
 
     def get_msg_hash(self, group_id: int) -> str | None:
         def gumbel() -> float:
@@ -132,6 +133,23 @@ class BotCommandShitPostMain(BotCommand):
             return None
         return min(weights.keys(), key=lambda k: weights[k])
 
+    async def _sender__send_msg(self, group_id: int) -> None:
+        msg_hash = self.get_msg_hash(group_id)
+        if msg_hash is None:
+            return
+        msg = self._database.prepare_send_msg(msg_hash)
+        meta_path = self.meta_dir / msg_hash
+        try:
+            await self.send_msg(msg, group_id=str(group_id), user_id=None)
+            self._metas[msg_hash]["sent"].append(group_id)
+            self._metas[msg_hash]["failed"] = 0
+        except Exception:
+            self._metas[msg_hash]["failed"] += 1
+        meta_path.write_text(
+            yaml.safe_dump(self._metas[msg_hash], allow_unicode=True),
+            encoding="utf-8",
+        )
+
     async def _sender(self, group_id: int) -> None:
         while True:
             random_seconds = random.uniform(self._setting["min"], self._setting["max"])
@@ -142,21 +160,7 @@ class BotCommandShitPostMain(BotCommand):
             if group_id not in self._setting["groups"]:
                 break
             async with shitpost_lock:
-                msg_hash = self.get_msg_hash(group_id)
-                if msg_hash is None:
-                    continue
-                msg = self._database.prepare_send_msg(msg_hash)
-                meta_path = self.meta_dir / msg_hash
-                try:
-                    await self.send_msg(msg, group_id=str(group_id), user_id=None)
-                    self._metas[msg_hash]["sent"].append(group_id)
-                    self._metas[msg_hash]["failed"] = 0
-                except Exception:
-                    self._metas[msg_hash]["failed"] += 1
-                meta_path.write_text(
-                    yaml.safe_dump(self._metas[msg_hash], allow_unicode=True),
-                    encoding="utf-8",
-                )
+                await self._sender__send_msg(group_id)
 
     def sync_senders(self) -> None:
         if self._exist_groups is None:
@@ -170,8 +174,10 @@ class BotCommandShitPostMain(BotCommand):
         async with shitpost_lock:
             await self.init()
             self.load_setting()
-            self.load_meta()
-        self._exist_groups = list(set(group["group_id"] for group in await self.bot.get_group_list()))
+            self.load_metas()
+        self._exist_groups = list(
+            set(group["group_id"] for group in await self.bot.get_group_list())
+        )
         for group in list(set(self._setting["groups"])):
             if all(group != exist_group for exist_group in self._exist_groups):
                 logger.warning(f"bot不在 {group} 中")

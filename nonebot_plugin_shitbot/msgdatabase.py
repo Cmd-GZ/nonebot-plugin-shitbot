@@ -5,7 +5,7 @@ import httpx
 import yaml
 from nonebot.adapters.onebot.v11 import Message
 
-from .aux import get_file_sha256, stuff_download, validate_schema
+from .aux import get_file_sha256, is_sha256, stuff_download, validate_schema
 from .config import config
 from .msgutils import (
     DELETE,
@@ -113,7 +113,7 @@ class BotMsgDataBase:
 
     def get_msg(self, sha256: str) -> DumpedMsg:
         msg_path = self._msgs_dir / sha256
-        if not msg_path.exists():
+        if not is_sha256(sha256) or not msg_path.exists():
             return []
         return yaml.safe_load(msg_path.read_text(encoding="utf-8"))
 
@@ -277,11 +277,17 @@ class BotMsgDataBase:
         temp_path.unlink()
         return medias, name, storable
 
-    async def has_msg(self, msg: DumpedMsg) -> str | None:
+    async def has_msg(self, msg: DumpedMsg | str) -> str | None:
+        if isinstance(msg, str):
+            return msg if is_sha256(msg) and (self._msgs_dir / msg).is_file() else None
         _, name, _ = await self._normalize_msg(msg, save_media=False)
         if name and self.get_msg(name):
             return name
         return None
+
+    async def get_sha256(self, msg: DumpedMsg) -> str:
+        _, name, _ = await self._normalize_msg(msg, save_media=False)
+        return name
 
     async def save_msg(self, msg: DumpedMsg, *, cover: bool = True) -> Path | None:
         medias, name, storable = await self._normalize_msg(msg, save_media=True)
@@ -314,7 +320,7 @@ class BotMsgDataBase:
 
     def del_msg(self, sha256: str):
         msg_path = self._msgs_dir / sha256
-        if not msg_path.exists():
+        if not is_sha256(sha256) or not msg_path.exists():
             return
         rc = self._msgs_rc.get(sha256)
         if rc is None or rc > 0:

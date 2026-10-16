@@ -12,7 +12,7 @@
 
 - B站视频解析与下载
 
-- 半自动搬史
+- 全自动搬史
 
 - Markdown渲染
 
@@ -41,21 +41,7 @@
 
 - 为代码添加更多注释和写文档 （依旧技术债务 依旧最烦 依旧随缘）
 
-- 智能化/shitpost （鉴于数据库搓好了 如果我后面认为这个写起来也不难的话我就来搓）
-  - 使用用上面提到的数据库 
-  - 添加一个元信息映射表（yaml） 类型大概是Dict[str, Dict[str, Any]] 键是史的文件名 也就是哈希值 值中保存着史的：real_id列表 时间戳 好评数 发送失败次数 存储着已经发送过该史的群号的列表
-
-  - 维护一个yaml文件用于记录各个real_id对应的史的哈希值
-
-  - 根据以上信息我瞎编了一个可能有用的发史优先级公式：
-
-    $$
-    \begin{aligned}
-    \small{50 - \frac{100}{\pi}\arctan\left(c_1时间戳 - f(好评数) + c_2 e^{c_3发送失败次数} + \infty\mathbb1_{已经发送过该史的群号}(将要发送史的群号) + \text{random}(0, 最新的史的时间戳与最旧的史的时间戳之差)\right)}
-    \end{aligned}
-    $$
-
-- 错误处理
+- 错误处理（同上）
 
 - 暂时想到这些 哪天我又有什么点子也说不定（6.12更新：一个月下来能看到 TODO List 越来越少还是挺感慨的 为什么补上这条括号内容？因为上面的项我都加了 这条不加我会犯强迫症）
 
@@ -93,9 +79,9 @@ nb plugin install nonebot-plugin-shitbot
 | `/pixiv` | P站图片检索 |
 | `/bilibili` | B站视频解析与下载 |
 | `/convert` | 图片格式转换 |
-| `/shitpost` | 搬史 |
+| `/shitpost` | 全自动搬史服务与数据库(~~化粪池~~)管理 |
 | `/md2pic` | Markdown 渲染为图片 |
-| `/autoreply` | 自动回复管理 |
+| `/autoreply` | 自动回复服务与数据库管理 |
 
 ## 鸣谢
 
@@ -104,5 +90,5 @@ nb plugin install nonebot-plugin-shitbot
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp): 为 /bilibili 提供视频解析与下载
 - [github-markdown-css](https://github.com/sindresorhus/github-markdown-css): 为markdown渲染提供了CSS主题
 
-###### 彩蛋: 千人千面(据说每个人看到的图都不一样): 
+###### 彩蛋: 千人千面(据说每个人看到的图都不一样):
 ![pic](https://manyacg.top/setu)

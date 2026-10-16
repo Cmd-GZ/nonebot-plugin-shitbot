@@ -11,7 +11,7 @@ import yaml
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 from nonebot.log import logger
 
-from ..aux import validate_schema
+from ..aux import is_sha256, validate_schema
 from ..command import BotCommand
 from ..msgdatabase import BotMsgDataBase
 from ..msgutils import (
@@ -28,6 +28,7 @@ _META_SCHEMA = {
     "failed": int,
     "timestamp": int,
 }
+
 
 class BotCommandShitpost(BotCommand):
     _name: str = "shitpost"
@@ -48,7 +49,7 @@ class BotCommandShitpost(BotCommand):
         self._has_sent: bool = False
         self._failed: int | None = None
         self._before: str | None = None
-        self._to: list[int] | None = None
+        self._to: list[int] = []
         self._groups: list[int] = []
         self._sha256s: list[str] = []
 
@@ -140,6 +141,8 @@ class BotCommandShitpost(BotCommand):
 
     def _load_meta(self, sha256: str) -> dict[str, Any] | None:
         try:
+            if not is_sha256(sha256):
+                return None
             meta = yaml.safe_load((self._meta_dir / sha256).read_text(encoding="utf-8"))
             if not validate_schema(meta, _META_SCHEMA):
                 return None
@@ -173,19 +176,21 @@ class BotCommandShitpost(BotCommand):
             main_command.load_setting()
 
     def _update_meta(self, sha256: str, meta: dict[str, Any]) -> None:
+        if not is_sha256(sha256):
+            return
         meta_path = self._meta_dir / sha256
         meta_path.write_text(yaml.safe_dump(meta, allow_unicode=True), encoding="utf-8")
 
         main_command = self._get_service()
         if main_command is not None:
-            main_command.load_meta([sha256])
+            main_command.load_metas([sha256])
 
     async def _save_shit(self, msg: DumpedMsg) -> str | None:
         path = await self._database.save_msg(msg, cover=False)
         if path is None:
             return None
         sha256 = path.name
-        if not (self._meta_dir / sha256).exists():
+        if is_sha256(sha256) and not (self._meta_dir / sha256).exists():
             self._database.inc_msg_rc(sha256)
         return sha256
 
@@ -193,7 +198,8 @@ class BotCommandShitpost(BotCommand):
         for sha256 in sha256s:
             self._database.dec_msg_rc(sha256)
             self._database.del_msg(sha256)
-            (self._meta_dir / sha256).unlink(missing_ok=True)
+            if is_sha256(sha256):
+                (self._meta_dir / sha256).unlink(missing_ok=True)
 
     async def _start(self) -> None:
         shitpost_session = BotSession.make("public", "shitpost")
@@ -251,40 +257,41 @@ class BotCommandShitpost(BotCommand):
             await self.send_msg("收集结束")
             self.unlock()
 
+    async def _del__get_before_stamp(self) -> int:
+        if self._before is None:
+            return 0
+        try:
+            time_seq = self._before.split(":")
+            return (
+                int(time.time())
+                - int(time_seq[0]) * 60 * 60 * 24
+                - int(time_seq[1]) * 60 * 60
+                - int(time_seq[2]) * 60
+                - int(time_seq[3])
+            )
+        except Exception:
+            await self.send_msg("警告：时间格式错误，格式为 DD:HH:MM:SS, 将忽略此项")
+            return 0
+
     async def _del(self) -> None:
         metas = {}
         target_groups = [-1]
-        failed_bound = math.inf
-        before_stamp = 0
         useless_sha256s = set(self._sha256s)
+        failed_bound = self._failed if self._failed is not None else math.inf
+        before_stamp = await self._del__get_before_stamp()
+
         if self._has_sent or self._failed is not None or self._before is not None:
             async with shitpost_lock:
                 metas = self._load_meta_all()
         if self._has_sent:
             async with shitpost_lock:
                 target_groups = self._load_setting().get("groups", []) or [-1]
-        if self._failed is not None:
-            failed_bound = self._failed
-        if self._before is not None:
-            try:
-                time_seq = self._before.split(":")
-                before_stamp = (
-                    int(time.time())
-                    - int(time_seq[0]) * 60 * 60 * 24
-                    - int(time_seq[1]) * 60 * 60
-                    - int(time_seq[2]) * 60
-                    - int(time_seq[3])
-                )
-            except Exception:
-                await self.send_msg(
-                    "警告：时间格式错误，格式为 DD:HH:MM:SS, 将忽略此项"
-                )
-        nonexist_sha256s = set()
-        for sha256 in useless_sha256s:
-            if not (self._meta_dir / sha256).exists():
+
+        for sha256 in set(useless_sha256s):
+            if not is_sha256(sha256) or not await self._database.has_msg(sha256):
                 await self.send_msg(f"警告：{sha256} 不存在")
-                nonexist_sha256s.add(sha256)
-        useless_sha256s -= nonexist_sha256s
+                useless_sha256s.remove(sha256)
+
         if self._reply is not None:
             async with shitpost_lock:
                 reply_sha256 = await self._database.has_msg(self._reply)
@@ -344,6 +351,27 @@ class BotCommandShitpost(BotCommand):
         await self.send_msg("设置完毕")
         self.unlock()
 
+    async def _mark__sent(self, meta: dict[str, Any]) -> None:
+        for group in self._a:
+            if group in meta["sent"]:
+                await self.send_msg(f"警告：群组 {group} 已存在")
+                continue
+            meta["sent"].append(group)
+        for group in self._d:
+            if group not in meta["sent"]:
+                await self.send_msg(f"警告：群组 {group} 不存在")
+                continue
+            meta["sent"].remove(group)
+
+    async def _mark__msg(self, sha256: str) -> None:
+        async with shitpost_lock:
+            meta = self._load_meta(sha256)
+            if meta is None:
+                await self.send_msg(f"警告：{sha256} 不存在")
+                return
+            await self._mark__sent(meta)
+            self._update_meta(sha256, meta)
+
     async def _mark(self) -> None:
         self._a = list(set(self._a)) if self._a is not None else []
         self._d = list(set(self._d)) if self._d is not None else []
@@ -351,23 +379,8 @@ class BotCommandShitpost(BotCommand):
             if group in self._d:
                 self._d.remove(group)
         for sha256 in self._sha256s:
-            async with shitpost_lock:
-                meta = self._load_meta(sha256)
-            if meta is None:
-                await self.send_msg(f"警告：{sha256} 不存在")
-                continue
-            for group in self._a:
-                if group in meta["sent"]:
-                    await self.send_msg(f"警告：群组 {group} 已存在")
-                    continue
-                meta["sent"].append(group)
-            for group in self._d:
-                if group not in meta["sent"]:
-                    await self.send_msg(f"警告：群组 {group} 不存在")
-                    continue
-                meta["sent"].remove(group)
-            async with shitpost_lock:
-                self._update_meta(sha256, meta)
+            await self._mark__msg(sha256)
+        await self.send_msg("更新完毕")
         self.unlock()
 
     async def _check(self) -> None:
@@ -384,57 +397,107 @@ class BotCommandShitpost(BotCommand):
             await self.send_msg(f"{sha256}: {meta is not None}")
         self.unlock()
 
-    async def _send(self) -> None:
-        msgs = []
-        valid_sha256s = []
-        async with shitpost_lock:
-            if not self._sha256s and self._meta_dir.exists() and any(f.is_file() for f in self._meta_dir.iterdir()):
-                self._sha256s.append(random.choice(list(self._meta_dir.iterdir())).name)
-            for sha256 in self._sha256s:
-                meta = self._load_meta(sha256)
-                if meta is None:
-                    await self.send_msg(f"警告：{sha256} 不存在")
-                    continue
-                msgs.append(self._database.prepare_send_msg(sha256))
-                valid_sha256s.append(sha256)
-            if not self._to:
-                if not self.session:
-                    self.unlock()
-                    return
-                group_id = self.session.group_id
-                for sha256, msg in zip(valid_sha256s, msgs):
-                    await self.send_msg(msg)
-                    if group_id == "private":
-                        continue
-                    meta = self._load_meta(sha256)
-                    if meta and int(group_id) not in meta["sent"]:
-                        meta["sent"].append(int(group_id))
-                        self._update_meta(sha256, meta)
+    async def _send__init_targets(
+        self, exist_groups: list[int]
+    ) -> dict[int | None, list[tuple[str, Message]]]:
+        send_map = {}
+        for group in set(self._to):
+            if group not in exist_groups:
+                await self.send_msg(f"警告：bot不在群组 {group} 中")
+                continue
+            send_map[group] = []
+        if not send_map and not self._to and self.session:
+            group_id = (
+                int(self.session.group_id)
+                if self.session.group_id != "private"
+                else None
+            )
+            send_map[group_id] = []
+        return send_map
 
-                self.unlock()
+    async def _send__get_msgs(
+        self, send_map: dict[int | None, list[tuple[str, Message]]]
+    ) -> None:
+        for sha256 in self._sha256s:
+            async with shitpost_lock:
+                meta = self._load_meta(sha256)
+            if meta is None:
+                await self.send_msg(f"警告：{sha256} 不存在")
+                continue
+            for value in send_map.values():
+                value.append((sha256, self._database.prepare_send_msg(sha256)))
+
+    async def _send__find_msg(
+        self, file_list: list[Path], key: int | None, value: list[tuple[str, Message]]
+    ) -> None:
+        random_sha256s = [file.name for file in file_list]
+        random.shuffle(random_sha256s)
+        for sha256 in random_sha256s:
+            async with shitpost_lock:
+                meta = self._load_meta(sha256)
+            if meta is not None and key not in meta["sent"]:
+                value.append((sha256, self._database.prepare_send_msg(sha256)))
                 return
-            exist_groups = [group["group_id"] for group in await self.bot.get_group_list()]
-            for group in list(self._to):
-                if group not in exist_groups:
-                    self._to.remove(group)
-                    await self.send_msg(f"警告：bot不在群组 {group} 中")
-            for group in self._to:
-                for sha256, msg in zip(valid_sha256s, msgs):
-                    await self.send_msg(msg, group_id=str(group))
-                    meta = self._load_meta(sha256)
-                    if meta and group not in meta["sent"]:
-                        meta["sent"].append(int(group))
-                        self._update_meta(sha256, meta)
-            self.unlock()
+        if not value:
+            await self.send_msg(f"警告：数据库中的史均已在群组 {key} 中发送过")
+
+    async def _send__find_msgs(
+        self, send_map: dict[int | None, list[tuple[str, Message]]]
+    ) -> None:
+        if not self._meta_dir.exists():
+            return
+        file_list = list(self._meta_dir.iterdir())
+        if any(value for value in send_map.values()) or all(
+            not f.is_file() for f in file_list
+        ):
+            return
+        for key, value in send_map.items():
+            await self._send__find_msg(file_list, key, value)
+
+    def _send__save_meta(self, sha256: str, group_id: int | None) -> None:
+        meta = self._load_meta(sha256)
+        if meta is None:
+            return
+        if group_id not in meta["sent"]:
+            meta["sent"].append(group_id)
+        self._update_meta(sha256, meta)
+
+    async def _send__send_msg(
+        self, group_id: int | None, value: list[tuple[str, Message]]
+    ) -> None:
+        for sha256, msg in value:
+            await self.send_msg(
+                msg, group_id=str(group_id) if group_id is not None else None
+            )
+            if group_id is None:
+                continue
+            async with shitpost_lock:
+                self._send__save_meta(sha256, group_id)
+
+    async def _send__send_msgs(
+        self, send_map: dict[int | None, list[tuple[str, Message]]]
+    ) -> None:
+        for group_id, value in send_map.items():
+            await self._send__send_msg(group_id, value)
+
+    async def _send(self) -> None:
+        send_map = await self._send__init_targets(
+            [group["group_id"] for group in await self.bot.get_group_list()]
+        )
+        await self._send__get_msgs(send_map)
+        await self._send__find_msgs(send_map)
+        await self._send__send_msgs(send_map)
+        self.unlock()
 
     async def _status(self) -> None:
         async with shitpost_lock:
-            shit_count = 0
-            for _ in self._meta_dir.iterdir():
-                shit_count += 1
+            shit_count = len(list(self._meta_dir.iterdir()))
             setting = self._load_setting()
         await self.send_msg(
-            f"当前库内实存量：{shit_count}\n当前目标群组：{setting['groups']}\n当前最小发送时间间隔：{setting['min']}\n当前最大发送时间间隔：{setting['max']}"
+            f"当前库内史存量：{shit_count}\n"
+            + f"当前目标群组：{setting['groups']}\n"
+            + f"当前最小发送时间间隔：{setting['min']}\n"
+            + f"当前最大发送时间间隔：{setting['max']}"
         )
         self.unlock()
 
@@ -445,14 +508,15 @@ class BotCommandShitpost(BotCommand):
             dumped_msg = await dump_message(self.bot, event.message)
             async with shitpost_lock:
                 sha256 = await self._save_shit(dumped_msg)
-                if sha256 is None:
-                    await self.send_msg("错误: 收集失败")
-                    return
+            if sha256 is None:
+                await self.send_msg("错误: 收集失败")
+                return
+            async with shitpost_lock:
                 meta = self._load_meta(sha256)
-                if meta is None:
-                    meta = {"timestamp": int(time.time()), "failed": 0, "sent": []}
-                meta["sent"] = list(set(meta["sent"] + self._groups))
-                self._update_meta(sha256, meta)
+            if meta is None:
+                meta = {"timestamp": int(time.time()), "failed": 0, "sent": []}
+            meta["sent"] = list(set(meta["sent"] + self._groups))
+            self._update_meta(sha256, meta)
             await self.send_msg(sha256)
 
     async def run(self, args: Message) -> None:
@@ -480,7 +544,9 @@ class BotCommandShitpost(BotCommand):
 
         self._argv = new_argv
 
-        if not self._check_perm("shitpost") or (not self._check_perm("shitpostmanager") and subcmd != "send"):
+        if not self._check_perm("shitpost") or (
+            not self._check_perm("shitpostmanager") and subcmd != "send"
+        ):
             await self.send_msg("权限不足")
             self.unlock()
             return
@@ -506,8 +572,8 @@ class BotCommandShitpost(BotCommand):
                 self._min = _min[0]
             if _max := subparser.opts_value.get("--max"):
                 self._max = _max[0]
-        if subcmd =="send" and self._check_perm("shitpostmanager"):
-            self._to = subparser.opts_value.get("--to")
+        if subcmd == "send" and self._check_perm("shitpostmanager"):
+            self._to = subparser.opts_value.get("--to", [])
 
         if subcmd == "start":
             await self._start()
@@ -530,23 +596,3 @@ class BotCommandShitpost(BotCommand):
             await self._send()
         if subcmd == "status":
             await self._status()
-
-
-
-"""
-备忘录
-/shitpost start [--auto]
-/shitpost stop [--auto]
-
-/shitpost add begin [群号...]
-/shitpost add end
-[reply]/shitpost del [--sent] [--failed <num>] [--before <时长>] [sha256...]
-
-/shitpost set [-a <群号>...] [-d <群号>...] [--min <秒>] [--max <秒>]
-/shitpost mark [-a <群号>...] [-d <群号>...] [sha256...]
-
-[reply]/shitpost check [sha256...]
-
-/shitpost send [--to <群号>] [sha256...]
-/shitpost status
-"""

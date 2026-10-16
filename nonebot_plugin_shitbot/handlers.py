@@ -113,7 +113,9 @@ async def bot_connect(bot: Bot):
         settings = yaml.safe_load(shitpost_setting_path.read_text(encoding="utf-8"))
         if settings is not None and settings["is_auto"]:
             session = BotSession.make("public", "shitpost")
-            shitpost_main = BotCommandShitPostMain.make(bot, session, _pid=session.curpid)
+            shitpost_main = BotCommandShitPostMain.make(
+                bot, session, _pid=session.curpid
+            )
             if shitpost_main is not None:
                 await shitpost_main.run(Message())
 
