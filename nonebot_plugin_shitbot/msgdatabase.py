@@ -171,6 +171,8 @@ class BotMsgDataBase:
                 seg_data = {}
                 if url is not None:
                     seg_data["url"] = url
+                if url is not None and file is not None:
+                    seg_data["name"] = file
                 if url is None and file is not None:
                     seg_data["file"] = file
 
@@ -235,9 +237,9 @@ class BotMsgDataBase:
                 try:
                     await stuff_download(client, term, temp_path)
                     name = get_file_sha256(temp_path)
-                    medias.append(name)
                     if save_media:
                         self._save_media(temp_path)
+                    medias.append(name)
                     temp_path.unlink(missing_ok=True)
                 except Exception:
                     temp_path.unlink(missing_ok=True)
@@ -249,14 +251,23 @@ class BotMsgDataBase:
             ["image", "video", "file", "record"],
         )
 
+        def _replace_error_media(seg: DumpedSeg) -> DumpedSeg:
+            if seg["type"] not in ["image", "video", "file", "record"]:
+                return seg
+            if seg["data"].get("file", _MEDIA_NONE) != _MEDIA_NONE:
+                return seg
+            seg = {
+                "type": "text",
+                "data": {
+                    "text": "[文件下载失败]",
+                },
+            }
+            return seg
+
         def _filter(seg: DumpedSeg) -> bool:
-            if seg["type"] in ["image", "video", "file", "record"]:
-                return seg["data"].get("file", _MEDIA_NONE) != _MEDIA_NONE
-            if seg["type"] in ["node", "reply", "forward"] and not seg["data"].get(
-                "content"
-            ):
-                return False
-            return True
+            return seg["type"] not in ["node", "reply", "forward"] or seg["data"].get("content")
+
+        storable = msg_map(_replace_error_media, storable)
 
         for _ in range(config.max_message_depth + 1):
             storable = msg_filter(_filter, storable)

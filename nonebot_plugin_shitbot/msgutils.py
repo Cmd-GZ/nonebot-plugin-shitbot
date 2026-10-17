@@ -39,6 +39,7 @@ So the utils handle them functionally
 from typing import Any, Callable, TypeVar
 
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11.event import File
 from nonebot.log import logger
 
 from .aux import validate_schema
@@ -153,16 +154,32 @@ async def _parse_dumped_msg(
     bot: Bot, msg: DumpedMsg, *, depth: int = config.max_message_depth
 ) -> DumpedMsg:
     async def _map(seg: DumpedSeg) -> DumpedSeg:
+        if seg["type"] == "file" and seg["data"].get("url") is None and seg["data"].get("file_id") is not None:
+            info = {}
+            try:
+                info = await bot.get_private_file_url(file_id=seg["data"]["file_id"])
+            except Exception as e:
+                logger.error(f"获取文件信息失败: {e}")
+            seg["data"]["url"] = info.get("url", "https://0.0.0.0")
+
         msg_id = seg.get("data", {}).get("id")
-        if msg_id is None or seg["data"].get("content") is not None:
-            return seg
         if seg["type"] == "forward":
+            content = seg["data"].get("content")
+            if content and isinstance(content[0], dict) and "message" in content[0]:
+                seg["data"]["content"] = _get_forward_nodes(content)
+                return seg
+            if content or msg_id is None:
+                return seg
             try:
                 forward_data = await bot.get_forward_msg(id=msg_id)
                 forward_msgs: DumpedMsg = forward_data.get("messages", [])
             except Exception:
                 forward_msgs = []
             seg["data"]["content"] = _get_forward_nodes(forward_msgs)
+
+        if msg_id is None or seg["data"].get("content") is not None:
+            return seg
+
         if seg["type"] == "reply":
             try:
                 reply_data = await bot.get_msg(message_id=msg_id)

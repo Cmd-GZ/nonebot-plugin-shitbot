@@ -17,6 +17,7 @@ from ..msgdatabase import BotMsgDataBase
 from ..msgutils import (
     DumpedMsg,
     dump_message,
+    undump_message,
 )
 from ..parser import BotArgParser
 from ..session import BotSession
@@ -50,10 +51,11 @@ class BotCommandShitpost(BotCommand):
         self._failed: int | None = None
         self._before: str | None = None
         self._to: list[int] = []
+        self._no_here: bool = False
         self._groups: list[int] = []
         self._sha256s: list[str] = []
 
-        self._rstate: str = ""
+        self._astate: str = ""
         self._is_accept_msg: bool = False
         self._roger_lock: asyncio.Lock = asyncio.Lock()
         self._reply: DumpedMsg | None = None
@@ -80,8 +82,12 @@ class BotCommandShitpost(BotCommand):
         add.set_rule(max=0, need_subcmd=True)
         begin = add.add_subparser("begin")
         end = add.add_subparser("end")
+        reply = add.add_subparser("reply")
         begin.set_rule(types=[int])
+        begin.add_opt("--no-here")
         end.set_rule(max=0)
+        reply.set_rule(types=[int])
+        reply.add_opt("--no-here")
 
         _del.set_rule()
         _del.add_opt("--sent")
@@ -107,7 +113,7 @@ class BotCommandShitpost(BotCommand):
         return parser
 
     async def _guard_state(self, subsubcmd: str | None = None) -> bool:
-        if subsubcmd is None:
+        if subsubcmd not in ["begin", "end"]:
             return await super()._guard_state()
         if subsubcmd == "begin" and self._argv is not None:
             return await super()._guard_state()
@@ -117,20 +123,22 @@ class BotCommandShitpost(BotCommand):
             await self.send_msg(tip)
             self.unlock()
             return False
-        if subsubcmd == "end" and self._rstate != "begin":
+        if subsubcmd == "end" and self._astate != "begin":
             return await super()._guard_state()
 
         return True
 
     async def _get_reply_msg(self, args: Message) -> DumpedMsg | None:
+        res = None
         if not args or args[0].type != "reply":
             return None
         try:
             reply = await self.bot.get_msg(message_id=args[0].data["id"])
+            res = await dump_message(self.bot, undump_message(reply["message"]))
         except Exception as e:
             logger.error(f"获取回复消息失败: {e}")
             return None
-        return reply["message"]
+        return res
 
     def _load_setting(self) -> dict[str, Any]:
         try:
@@ -201,6 +209,27 @@ class BotCommandShitpost(BotCommand):
             if is_sha256(sha256):
                 (self._meta_dir / sha256).unlink(missing_ok=True)
 
+    async def _store_shit(self, msg: Message|DumpedMsg) -> None:
+        dumped_msg = await dump_message(self.bot, msg) if isinstance(msg, Message) else msg
+        async with shitpost_lock:
+            sha256 = await self._save_shit(dumped_msg)
+            if sha256 is None:
+                await self.send_msg("错误: 收集失败")
+                return
+            meta = self._load_meta(sha256)
+            if meta is None:
+                meta = {"timestamp": int(time.time()), "failed": 0, "sent": []}
+            meta["sent"] = list(set(meta["sent"] + self._groups))
+            self._update_meta(sha256, meta)
+        await self.send_msg(sha256)
+
+    async def _remove_nonexist_groups(self, groups: list[int]) -> None:
+        exist_groups = [group["group_id"] for group in await self.bot.get_group_list()]
+        nonexist_groups = [group for group in groups if group not in exist_groups]
+        for group in nonexist_groups:
+            await self.send_msg(f"警告: bot不在群组 {group} 中")
+            groups.remove(group)
+
     async def _start(self) -> None:
         shitpost_session = BotSession.make("public", "shitpost")
         main_command = BotCommandShitPostMain.make(
@@ -238,24 +267,38 @@ class BotCommandShitpost(BotCommand):
         self.unlock()
 
     async def _add_begin(self, groups: list[int]) -> None:
-        self._groups = [group for group in set(groups)]
-        exist_group_list = await self.bot.get_group_list()
-        exist_groups = [group["group_id"] for group in exist_group_list]
-        nonexist_groups = [group for group in self._groups if group not in exist_groups]
-        for group in nonexist_groups:
-            logger.warning(f"不存在的群组: {group}")
-            await self.send_msg(f"警告：不存在的群组: {group}")
-            self._groups.remove(group)
+        if self.session is None:
+            return
+        self._groups = list(set(groups))
+        await self._remove_nonexist_groups(self._groups)
+        group_id = int(self.session.group_id) if self.session.group_id != "private" else None
+        self._groups += [group_id] if not self._no_here and group_id is not None and group_id not in self._groups else []
         await self.send_msg("收集开始")
-        self._rstate = "begin"
+        self._astate = "begin"
         self._is_accept_msg = True
 
     async def _add_end(self) -> None:
-        self._rstate = "end"
+        self._astate = "end"
         self._is_accept_msg = False
         async with self._roger_lock:
             await self.send_msg("收集结束")
             self.unlock()
+
+    async def _add_reply(self, groups: list[int]) -> None:
+        if self.session is None:
+            return
+        self._astate = "reply"
+        if self._reply is None:
+            await self.send_msg("错误: 未识别到被回复信息")
+            self.unlock()
+            return
+        self._groups = list(set(groups))
+        await self._remove_nonexist_groups(self._groups)
+        group_id = int(self.session.group_id) if self.session.group_id != "private" else None
+        self._groups += [group_id] if not self._no_here and group_id is not None and group_id not in self._groups else []
+        await self._store_shit(self._reply)
+        self.unlock()
+
 
     async def _del__get_before_stamp(self) -> int:
         if self._before is None:
@@ -319,16 +362,10 @@ class BotCommandShitpost(BotCommand):
         async with shitpost_lock:
             setting = self._load_setting()
         new_groups = list(set(setting["groups"]))
-        exist_groups = await self.bot.get_group_list()
-        self._a = list(set(self._a)) if self._a is not None else []
-        self._d = list(set(self._d)) if self._d is not None else []
-        for group in self._a:
-            if group in self._d:
-                self._d.remove(group)
-        for group in list(self._a):
-            if all(group != exist_group["group_id"] for exist_group in exist_groups):
-                await self.send_msg(f"警告：bot不在群组 {group} 中")
-                self._a.remove(group)
+        cap = set(self._a).intersection(self._d)
+        self._a = list(set(self._a) - cap)
+        self._d = list(set(self._d) - cap)
+        await self._remove_nonexist_groups(self._a)
         for group in self._a:
             if group in new_groups:
                 await self.send_msg(f"警告：群组 {group} 已存在")
@@ -373,11 +410,10 @@ class BotCommandShitpost(BotCommand):
             self._update_meta(sha256, meta)
 
     async def _mark(self) -> None:
-        self._a = list(set(self._a)) if self._a is not None else []
-        self._d = list(set(self._d)) if self._d is not None else []
-        for group in self._a:
-            if group in self._d:
-                self._d.remove(group)
+        cap = set(self._a).intersection(self._d)
+        self._a = list(set(self._a) - cap)
+        self._d = list(set(self._d) - cap)
+        await self._remove_nonexist_groups(self._a)
         for sha256 in self._sha256s:
             await self._mark__msg(sha256)
         await self.send_msg("更新完毕")
@@ -397,14 +433,11 @@ class BotCommandShitpost(BotCommand):
             await self.send_msg(f"{sha256}: {meta is not None}")
         self.unlock()
 
-    async def _send__init_targets(
-        self, exist_groups: list[int]
-    ) -> dict[int | None, list[tuple[str, Message]]]:
+    async def _send__init_targets(self) -> dict[int | None, list[tuple[str, Message]]]:
         send_map = {}
-        for group in set(self._to):
-            if group not in exist_groups:
-                await self.send_msg(f"警告：bot不在群组 {group} 中")
-                continue
+        self._to = list(set(self._to))
+        await self._remove_nonexist_groups(self._to)
+        for group in self._to:
             send_map[group] = []
         if not send_map and not self._to and self.session:
             group_id = (
@@ -481,9 +514,7 @@ class BotCommandShitpost(BotCommand):
             await self._send__send_msg(group_id, value)
 
     async def _send(self) -> None:
-        send_map = await self._send__init_targets(
-            [group["group_id"] for group in await self.bot.get_group_list()]
-        )
+        send_map = await self._send__init_targets()
         await self._send__get_msgs(send_map)
         await self._send__find_msgs(send_map)
         await self._send__send_msgs(send_map)
@@ -505,19 +536,7 @@ class BotCommandShitpost(BotCommand):
         async with self._roger_lock:
             if not self._is_accept_msg:
                 return
-            dumped_msg = await dump_message(self.bot, event.message)
-            async with shitpost_lock:
-                sha256 = await self._save_shit(dumped_msg)
-            if sha256 is None:
-                await self.send_msg("错误: 收集失败")
-                return
-            async with shitpost_lock:
-                meta = self._load_meta(sha256)
-            if meta is None:
-                meta = {"timestamp": int(time.time()), "failed": 0, "sent": []}
-            meta["sent"] = list(set(meta["sent"] + self._groups))
-            self._update_meta(sha256, meta)
-            await self.send_msg(sha256)
+            await self._store_shit(event.message)
 
     async def run(self, args: Message) -> None:
         if not self.session:
@@ -554,6 +573,10 @@ class BotCommandShitpost(BotCommand):
         self._reply = await self._get_reply_msg(args)
         if subcmd == "start" or subcmd == "stop":
             self._has_auto = subparser.opts_value.get("--auto") != []
+        if subcmd == "add" and subsubcmd in ["begin", "reply"]:
+            self._no_here = bool(
+                subparser.subparsers[subsubcmd].opts_value.get("--no-here")
+            )
         if subcmd in ["del", "mark", "check", "send"]:
             self._sha256s = subparser.value
         if subcmd == "del":
@@ -584,6 +607,9 @@ class BotCommandShitpost(BotCommand):
             await self._add_begin(subsubparser.value)
         if subcmd == "add" and subsubcmd == "end":
             await self._add_end()
+        if subcmd == "add" and subsubcmd == "reply":
+            subsubparser = subparser.subparsers[subsubcmd]
+            await self._add_reply(subsubparser.value)
         if subcmd == "del":
             await self._del()
         if subcmd == "set":

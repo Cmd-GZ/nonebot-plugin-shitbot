@@ -224,7 +224,7 @@ class BotCommandAutoreply(BotCommand):
         return parser
 
     async def _guard_state(self, subsubcmd=None):
-        if subsubcmd is None:
+        if subsubcmd not in ["start", "stop"]:
             return await super()._guard_state()
         if subsubcmd == "start" and self._argv is not None:
             return await super()._guard_state()

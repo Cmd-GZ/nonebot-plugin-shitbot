@@ -10,6 +10,7 @@
 
 /shitpost add begin [群号...]          开始收集消息入库
 /shitpost add end                      结束收集
+/shitpost add reply [群号...]          回复消息入库
 /shitpost del   [选项] [sha256...]     删除库中的史
 
 /shitpost set   [选项]                 修改目标群列表与转发间隔
@@ -22,6 +23,8 @@
 ```
 
 其中 `del`, `check` 命令都可以**回复**一条消息来代替手打哈希。
+
+`add reply` 则**必须**回复一条信息。
 
 ## 选项
 
@@ -36,6 +39,7 @@
 | `--sent` | `del` | 删除「已经发给所有目标群」的史 |
 | `--failed <次数>` | `del` | 删除失败次数大于等于该值的史 |
 | `--before <DD:HH:MM:SS>` | `del` | 删除入库时间早于该时长的史 |
+| `--no-here` | `add begin` / `add reply` | 不把当前会话算作「已发送」（见下） |
 
 ## 各命令说明
 
@@ -58,16 +62,42 @@
 
 `add begin` 之后，你发给 Bot 的消息都会被存进史库；`add end` 结束收集。
 
-`add begin` 后面可以跟群号（可省略）。**这些群号会被标记为「这条史已经发过」，即新入库的史不会立刻转发给它们。**
+入库的史会被标记为「已发给」：
+
+- `add begin` 后面跟的群号（可省略，Bot 不在的群会被剔除并提示）
+- **当前会话所在的群**（私聊不标记）
+
+也就是说这些群不会再收到这些史的自动转发。加 `--no-here` 可以取消第二项。
 
 ```bash
-/shitpost add begin            开始收集，新史没有已发送记录
-/shitpost add begin 114514     开始收集，且新史视为已发给 114514
+/shitpost add begin                    开始收集，当前群视为已发送
+/shitpost add begin 114514             开始收集，视为已发给 114514 + 当前群
+/shitpost add begin --no-here          开始收集，当前群不算已发送（之后仍可能发到这里）
+/shitpost add begin --no-here 114514   只算 114514
 (发送消息...)
 /shitpost add end
 ```
 
 每条史入库后 Bot 会回复它的 `sha256`（哈希），后续可以用它来查找、发送或删除。
+
+### add reply
+
+**必须回复一条消息**，把被回复的消息存进史库（不需要先 `add begin`）。
+
+```bash
+(回复某条消息) /shitpost add reply
+(回复某条消息) /shitpost add reply 114514
+(回复某条消息) /shitpost add reply --no-here
+```
+
+入库后这条史会被标记为「已发给」：
+
+- 命令里填的群号（Bot 不在的群会被剔除并提示）
+- **当前会话所在的群**（私聊不标记）
+
+加 `--no-here` 可以取消第二项，即之后仍可能被转发到当前群。
+
+也就是说这些群不会再收到这条史的自动转发。入库成功后 Bot 会回复它的 `sha256`。
 
 ### del
 
