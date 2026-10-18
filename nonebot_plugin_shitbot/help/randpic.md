@@ -2,6 +2,13 @@
 
 **随机获取二次元图片并发送**
 
+## 鸣谢：
+
+感谢下列网站提供的 API：
+
+- [ManyACG](https://manyacg.top)(https://manyacg.top)
+- [Lolicon](https://api.lolicon.app)(https://api.lolicon.app)
+
 ## 使用方式
 
 ```bash
@@ -24,6 +31,7 @@
 |------|------|
 | `1`, `m`, `manyacg` | https://api.manyacg.top/v1/artwork/random |
 | `2`, `l`, `lolicon` | https://api.lolicon.app/setu/v2 |
+| `r` | 随机选择一个 API (若符合结果的图片不足则会从另一个 API 中尝试抽取剩余部分) |
 
 ### 内容模式
 

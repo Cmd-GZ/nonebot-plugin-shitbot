@@ -10,6 +10,7 @@ from pixivpy_async.utils import JsonDict
 
 from ..command import BotCommand
 from ..config import config
+from ..msgutils import dump_message, get_downloaded_msg
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:
@@ -124,6 +125,14 @@ class BotCommandPixiv(BotCommand):
                 MessageSegment("text", {"text": f"标题: {title}\n作者: {author}\n"})
             )
             count = 0
+            image_dir = (
+                config.cache
+                / self.session.group_id
+                / self.session.user_id
+                / str(self._pid)
+                / "images"
+            )
+            image_dir.mkdir(parents=True, exist_ok=True)
             for url in urls:
                 seg = MessageSegment("image", {"url": url})
                 seg.data["summary"] = "我的新自拍喵[图片]"
@@ -134,6 +143,9 @@ class BotCommandPixiv(BotCommand):
                     msg = msgs[-1]
                     count = 0
             for msg in msgs:
+                msg = await get_downloaded_msg(
+                    image_dir, await dump_message(self.bot, (msg)), timeout=30
+                )
                 await self.send_msg(msg)
             logger.info("发送图片成功")
         except Exception as e:

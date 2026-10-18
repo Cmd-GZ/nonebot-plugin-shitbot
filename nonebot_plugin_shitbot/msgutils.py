@@ -36,13 +36,15 @@ So the utils handle them functionally
 - `modify_msg_data`: modify the datas of `DumpedMsg`
 """
 
+import uuid
+from pathlib import Path
 from typing import Any, Callable, TypeVar
 
+import httpx
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
-from nonebot.adapters.onebot.v11.event import File
 from nonebot.log import logger
 
-from .aux import validate_schema
+from .aux import stuff_download, validate_schema
 from .config import config
 
 MSG_SCHEMA = [
@@ -154,7 +156,11 @@ async def _parse_dumped_msg(
     bot: Bot, msg: DumpedMsg, *, depth: int = config.max_message_depth
 ) -> DumpedMsg:
     async def _map(seg: DumpedSeg) -> DumpedSeg:
-        if seg["type"] == "file" and seg["data"].get("url") is None and seg["data"].get("file_id") is not None:
+        if (
+            seg["type"] == "file"
+            and seg["data"].get("url") is None
+            and seg["data"].get("file_id") is not None
+        ):
             info = {}
             try:
                 info = await bot.get_private_file_url(file_id=seg["data"]["file_id"])
@@ -236,6 +242,48 @@ def undump_message(dumped_msg: DumpedMsg) -> Message:
         MessageSegment(dumped_seg["type"], dumped_seg["data"])
         for dumped_seg in dumped_msg
     )
+
+
+async def get_downloaded_msg(
+    media_dir: Path, msg: DumpedMsg, *, referer: str | None = None, timeout: int = 5
+) -> Message:
+    """
+    Get the normal message(not file message) with all media files downloaded and can be sent directly
+        - media_dir: the directory to store media files
+        - msg: the message
+    """
+    urls = get_multimedias_url(msg, basetypes=["image", "video", "record"])
+    files = []
+    client_media_dir = config.client_cache / media_dir.relative_to(config.cache)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for url in urls:
+            name = str(uuid.uuid4().hex)
+            path = media_dir / name
+            try:
+                await stuff_download(client, url, path, referer=referer)
+                files.append(f"file://{client_media_dir / name}")
+            except Exception:
+                files.append("failed")
+        data = {
+            "url": DELETE,
+            "file": DataVariables(files),
+        }
+        downloaded_msg = modify_msg_data(msg, data, ["image", "video", "record"])
+
+        def _map(seg: DumpedSeg) -> DumpedSeg:
+            if seg["type"] not in ["image", "video", "record"]:
+                return seg
+            if seg["data"]["file"] != "failed":
+                return seg
+            return {
+                "type": "text",
+                "data": {
+                    "text": "[文件下载失败]",
+                },
+            }
+
+        downloaded_msg = msg_map(_map, downloaded_msg)
+        return undump_message(downloaded_msg)
 
 
 async def send_msg(

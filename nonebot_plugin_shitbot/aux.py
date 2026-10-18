@@ -85,7 +85,7 @@ async def stuff_download(
                 async for chunk in resp.aiter_bytes():
                     f.write(chunk)
     except Exception as e:
-        logger.error(f"下载 {url} 失败: {e}")
+        logger.error(f"下载失败: {type(e).__name__}: {e!r}")
         raise
 
 

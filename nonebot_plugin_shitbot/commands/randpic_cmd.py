@@ -8,6 +8,8 @@ from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
 
 from ..command import BotCommand
+from ..config import config
+from ..msgutils import dump_message, get_downloaded_msg
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:
@@ -68,10 +70,17 @@ class BotCommandRandpic(BotCommand):
                 payload["tag"] = tag
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(self._api, headers=headers, json=payload)
-        if response.status_code != 200:
-            logger.error(f"获取图片失败, 状态码{response.status_code}")
-            return []
+            response_code = -1
+            response = None
+            try:
+                response = await client.post(self._api, headers=headers, json=payload)
+                response_code = response.status_code
+            except Exception as e:
+                logger.error(f"获取图片失败: {e}")
+                return []
+            if response_code != 200 or response is None:
+                logger.error(f"获取图片失败, 状态码{response_code}")
+                return []
 
         data = response.json()
         pics = data.get("data", [])
@@ -86,8 +95,18 @@ class BotCommandRandpic(BotCommand):
         return pics
 
     async def _send_pics(self, pics: list[dict[str, Any]]):
+        if not self.session:
+            return
         if len(pics) < self._num:
             await self.send_msg(f"未找到指定数量的图片，仅找到 {len(pics)} 张")
+        image_dir = (
+            config.cache
+            / self.session.group_id
+            / self.session.user_id
+            / str(self._pid)
+            / "images"
+        )
+        image_dir.mkdir(parents=True, exist_ok=True)
         for pic in pics:
             title = pic["title"]
             source = pic["source_url"]
@@ -101,6 +120,9 @@ class BotCommandRandpic(BotCommand):
                 seg.data["summary"] = "我的新自拍喵[图片]"
                 msg.append(seg)
             try:
+                msg = await get_downloaded_msg(
+                    image_dir, await dump_message(self.bot, (msg)), timeout=30
+                )
                 await self.send_msg(msg)
                 logger.info("发送图片成功")
             except Exception as e:
@@ -167,6 +189,10 @@ class BotCommandRandpic(BotCommand):
             self._keyword = ""
 
         pics = await self._get_pics()
+        if len(pics) < self._num and a == "r":
+            self._api = self._apis[0] if self._api == self._apis[1] else self._apis[1]
+            pics += await self._get_pics()
+            pics = pics[: self._num]
         await self._send_pics(pics)
         self.unlock()
         return

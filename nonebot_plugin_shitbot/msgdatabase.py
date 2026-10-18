@@ -265,7 +265,9 @@ class BotMsgDataBase:
             return seg
 
         def _filter(seg: DumpedSeg) -> bool:
-            return seg["type"] not in ["node", "reply", "forward"] or seg["data"].get("content")
+            return seg["type"] not in ["node", "reply", "forward"] or seg["data"].get(
+                "content"
+            )
 
         storable = msg_map(_replace_error_media, storable)
 

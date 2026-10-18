@@ -209,8 +209,10 @@ class BotCommandShitpost(BotCommand):
             if is_sha256(sha256):
                 (self._meta_dir / sha256).unlink(missing_ok=True)
 
-    async def _store_shit(self, msg: Message|DumpedMsg) -> None:
-        dumped_msg = await dump_message(self.bot, msg) if isinstance(msg, Message) else msg
+    async def _store_shit(self, msg: Message | DumpedMsg) -> None:
+        dumped_msg = (
+            await dump_message(self.bot, msg) if isinstance(msg, Message) else msg
+        )
         async with shitpost_lock:
             sha256 = await self._save_shit(dumped_msg)
             if sha256 is None:
@@ -271,8 +273,16 @@ class BotCommandShitpost(BotCommand):
             return
         self._groups = list(set(groups))
         await self._remove_nonexist_groups(self._groups)
-        group_id = int(self.session.group_id) if self.session.group_id != "private" else None
-        self._groups += [group_id] if not self._no_here and group_id is not None and group_id not in self._groups else []
+        group_id = (
+            int(self.session.group_id) if self.session.group_id != "private" else None
+        )
+        self._groups += (
+            [group_id]
+            if not self._no_here
+            and group_id is not None
+            and group_id not in self._groups
+            else []
+        )
         await self.send_msg("收集开始")
         self._astate = "begin"
         self._is_accept_msg = True
@@ -294,11 +304,18 @@ class BotCommandShitpost(BotCommand):
             return
         self._groups = list(set(groups))
         await self._remove_nonexist_groups(self._groups)
-        group_id = int(self.session.group_id) if self.session.group_id != "private" else None
-        self._groups += [group_id] if not self._no_here and group_id is not None and group_id not in self._groups else []
+        group_id = (
+            int(self.session.group_id) if self.session.group_id != "private" else None
+        )
+        self._groups += (
+            [group_id]
+            if not self._no_here
+            and group_id is not None
+            and group_id not in self._groups
+            else []
+        )
         await self._store_shit(self._reply)
         self.unlock()
-
 
     async def _del__get_before_stamp(self) -> int:
         if self._before is None:

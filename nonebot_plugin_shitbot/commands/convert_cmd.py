@@ -14,7 +14,13 @@ from nonebot.log import logger
 from ..aux import stuff_download
 from ..command import BotCommand
 from ..config import config
-from ..msgutils import dump_message, get_message_with_reply, get_multimedias_url
+from ..msgutils import (
+    DumpedMsg,
+    dump_message,
+    get_message_with_reply,
+    get_multimedias_url,
+    undump_message,
+)
 from ..parser import BotArgParser
 from ..tasks import EndOfQueue, prod_cons
 
@@ -47,10 +53,14 @@ class BotCommandConvert(BotCommand):
         parser = BotArgParser()
         start = parser.add_subparser("start")
         stop = parser.add_subparser("stop")
+        reply = parser.add_subparser("reply")
         start.set_rule(max=0)
-        start.add_opt("-m", required=True, choice=["video", "frame"], default=["video"])
         stop.set_rule(max=0)
+        reply.set_rule(max=0)
         parser.set_rule(max=0, need_subcmd=True)
+        parser.add_opt(
+            "-m", required=True, choice=["video", "frame"], default=["video"]
+        )
         return parser
 
     async def _guard_state(self, subcmd=None):
@@ -274,6 +284,18 @@ class BotCommandConvert(BotCommand):
 
         await self.send_msg("输出发送完毕。")
 
+    async def _get_reply(self, args: Message):
+        if not args:
+            return None
+        if args[0].type != "reply":
+            return None
+        try:
+            reply = await self.bot.get_msg(message_id=args[0].data["id"])
+        except Exception as e:
+            logger.error(f"获取回复消息失败: {e}")
+            return None
+        return await dump_message(self.bot, undump_message(reply["message"]))
+
     async def _convert_start(self):
         if not self.session:
             return
@@ -348,11 +370,6 @@ class BotCommandConvert(BotCommand):
         self._create_task(_downloads_to_pngs())
         self._create_task(_pngs_to_outputs())
 
-        logger.info(f"用户 {self.session.user_id} 开始了图片收集")
-        await self.send_msg(
-            "图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。"
-        )
-
         self._if_accept_pic = True
         return
 
@@ -372,6 +389,23 @@ class BotCommandConvert(BotCommand):
         await self._send_outputs()
         self.unlock()
         return
+
+    async def _convert_reply(self, reply: DumpedMsg | None):
+        if reply is None:
+            await self.send_msg("错误：无法获取回复消息")
+            self.unlock()
+            return
+        await self._convert_start()
+        async with self._prod_lock:
+            url_list = get_multimedias_url(reply, basetypes=["image"])
+            if not url_list:
+                await self.send_msg("被回复的消息中没有图片")
+                self.unlock()
+                return
+            for url in url_list:
+                await self._urls.put(url)
+        await self._convert_stop()
+        self.unlock()
 
     async def roger(self, event: MessageEvent):
         async with self._prod_lock:
@@ -406,14 +440,23 @@ class BotCommandConvert(BotCommand):
                 self.unlock()
                 return
 
-            if subcmd == "start":
-                new_mode = self._parser.subparsers[subcmd].opts_value.get(
-                    "-m", ["video"]
-                )[0]
+            if subcmd != "stop":
+                new_mode = self._parser.opts_value.get("-m", ["video"])[0]
                 self._mode = new_mode
+
+            if subcmd == "start":
                 await self._convert_start()
+                logger.info(f"用户 {self.session.user_id} 开始了图片收集")
+                await self.send_msg(
+                    "图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。"
+                )
                 return
 
             if subcmd == "stop":
                 await self._convert_stop()
+                return
+
+            if subcmd == "reply":
+                reply = await self._get_reply(args)
+                await self._convert_reply(reply)
                 return
