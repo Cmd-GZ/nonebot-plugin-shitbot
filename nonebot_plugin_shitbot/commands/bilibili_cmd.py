@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import random
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
@@ -34,7 +35,20 @@ class BotCommandBilibili(BotCommand):
     def _init_parser(self):
         parser = BotArgParser()
         parser.set_rule(min=0)
+        parser.add_opt("--res", required=True, type=int, default=[720])
         return parser
+
+    @staticmethod
+    def _cookie_stream(cookie: str) -> io.StringIO:
+        lines = ["# Netscape HTTP Cookie File"]
+        for item in cookie.split(";"):
+            if "=" not in item:
+                continue
+            key, value = item.split("=", 1)
+            lines.append(
+                f".bilibili.com\tTRUE\t/\tFALSE\t0\t{key.strip()}\t{value.strip()}"
+            )
+        return io.StringIO("\n".join(lines) + "\n")
 
     async def _preprocess_reply(self, args: Message):
         if not args or args[0].type != "reply":
@@ -189,14 +203,19 @@ class BotCommandBilibili(BotCommand):
             / str(self._pid)
             / "videos"
         )
+        res = self._parser.opts_value["--res"][0]
         videos_dir.mkdir(parents=True, exist_ok=True)
         opts: _Params = {
             "no_warnings": True,
             "noplaylist": True,
-            "format_sort": [f"res:{720}", "vcodec:h264"],
+            "format_sort": [f"res:{res}", "vcodec:h264"],
             "merge_output_format": "mp4",
             "outtmpl": str(videos_dir / "%(id)s.%(ext)s"),
         }
+        if config.bilibili_cookie:
+            cookie = self._cookie_stream(config.bilibili_cookie)
+            opts["cookiefile"] = cast("str", cookie)
+            logger.info("已加载 bilibili cookie")
         with YoutubeDL(opts) as ydl:
             await self._parse_videos(ydl)
 

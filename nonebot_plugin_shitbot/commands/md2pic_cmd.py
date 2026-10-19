@@ -17,6 +17,7 @@ from nonebot_plugin_htmlrender import md_to_pic
 from ..aux import stuff_download
 from ..command import BotCommand
 from ..config import config
+from ..msgutils import dump_message, undump_message
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:
@@ -59,6 +60,7 @@ class BotCommandMd2pic(BotCommand):
     async def _process_reply(self, args: Message):
         if not self.session:
             return
+
         if not args or args[0].type != "reply":
             return
         reply = {"message": []}
@@ -71,7 +73,8 @@ class BotCommandMd2pic(BotCommand):
             if seg.get("type") == "text":
                 self._md = self._md + seg["data"]["text"]
         if reply["message"] and reply["message"][0].get("type") == "file":
-            url = reply["message"][0]["data"].get("url", "")
+            msg = await dump_message(self.bot, undump_message(reply["message"]))
+            url = msg[0]["data"].get("url", "")
             file_dir = (
                 config.cache
                 / self.session.group_id

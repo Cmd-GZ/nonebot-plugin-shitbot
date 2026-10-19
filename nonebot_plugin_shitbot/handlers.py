@@ -162,6 +162,8 @@ cmd_autoreply = cmd_register("autoreply", BotCommandAutoreply)
 
 cmd_bilibili = cmd_register("bilibili", BotCommandBilibili)
 
+cmd_au2rc = cmd_register("au2rc", BotCommandAu2rc)
+
 cmd_otherwise = cmd_register("", BotCommand, priority=3)
 
 # ===Messages handlers=== #

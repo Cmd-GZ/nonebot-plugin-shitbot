@@ -275,7 +275,9 @@ class BotMsgDataBase:
             storable = msg_filter(_filter, storable)
 
         msg = modify_msg_data(
-            storable, {"summary": DELETE, "sub_type": DELETE}, ["image"]
+            storable,
+            {"summary": DELETE, "sub_type": DELETE, "name": DELETE},
+            ["image", "record", "video", "file"],
         )
         msg = modify_msg_data(msg, {"user_id": DELETE, "nickname": DELETE}, ["node"])
 

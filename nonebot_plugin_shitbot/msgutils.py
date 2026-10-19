@@ -168,6 +168,21 @@ async def _parse_dumped_msg(
                 logger.error(f"获取文件信息失败: {e}")
             seg["data"]["url"] = info.get("url", "https://0.0.0.0")
 
+        if seg["type"] == "record" and seg["data"].get("file") is not None:
+            info = {}
+            try:
+                info = await bot.get_record(file=seg["data"]["file"], out_format="mp3")
+            except Exception as e:
+                logger.error(f"获取原声录音文件失败: {e}")
+            url = seg["data"].get("url", "https://0.0.0.0")
+            if info.get("url"):
+                local_url = Path(info["url"])
+                local_url = config.qq_root / local_url.relative_to(
+                    config.client_qq_root
+                )
+                url = f"file://{local_url}"
+            seg["data"]["url"] = url
+
         msg_id = seg.get("data", {}).get("id")
         if seg["type"] == "forward":
             content = seg["data"].get("content")

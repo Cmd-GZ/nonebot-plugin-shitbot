@@ -136,6 +136,24 @@ _DEFAULT_ENTRIES: dict[str, list] = {
         [],
         ["banned"],
     ],
+    "au2rc": [
+        "是否允许使用au2rc命令",
+        False,
+        [],
+        ["banned"],
+        False,
+        [],
+        ["banned"],
+    ],
+    "au2rcboardcast": [
+        "是否允许使用au2rc命令的发送结果到指定群聊的功能",
+        True,
+        [],
+        ["banned"],
+        True,
+        [],
+        ["banned"],
+    ],
 }
 
 
@@ -144,9 +162,12 @@ _DEFAULT_ENTRIES: dict[str, list] = {
 # Users set overrides via scope-prefixed env vars, e.g.:
 #   SHITBOT__CLIENT_CACHE=/app/cache/nonebot_plugin_shitbot
 #   SHITBOT__CLIENT_DATA=/app/data/nonebot_plugin_shitbot
+#   SHITBOT__CLIENT_QQ_ROOT=/app/.config/QQ
+#   SHITBOT__QQ_ROOT=/home/user/docker/QQ
 #   SHITBOT__OWNERS='["114514","1919810"]'
 #   SHITBOT__MAX_MESSAGE_DEPTH=16
 #   SHITBOT__PIXIV_ACCESS_TOKEN=kFccrAzYtHursDAyVmE50
+#   SHITBOT__BILIBILI_COOKIE='SESSDATA=xxx%2Cyyy; bili_jct=zzz'
 
 
 class ShitBotConfig(BaseModel):
@@ -154,9 +175,15 @@ class ShitBotConfig(BaseModel):
 
     client_cache: Path | None = None  # None = same filesystem as bot
     client_data: Path | None = None
+    # QQ data dir mapping (container side -> host side). Needed when the
+    # protocol side reports absolute paths of files on its own filesystem,
+    # e.g. the local path returned by get_record. Both must be set.
+    client_qq_root: Path | None = None  # e.g. /app/.config/QQ
+    qq_root: Path | None = None  # e.g. /home/user/docker/QQ
     owners: list[str] | None = None
     max_message_depth: int = 16
     pixiv_access_token: str = ""
+    bilibili_cookie: str = ""  # raw Cookie header, e.g. "SESSDATA=...; bili_jct=..."
 
 
 class PluginConfig(BaseModel):
@@ -167,8 +194,8 @@ class PluginConfig(BaseModel):
 
 # ── Runtime facade ──────────────────────────────────────────────────
 # Wraps dotenv-sourced config with localstore-backed storage paths.
-#   • Config.__init__ receives cache / data as *parameters* — it never
-#     touches NoneBot or localstore itself.
+#   • Config.__init__ receives cache / data / qq_root as *parameters* —
+#     it never touches NoneBot or localstore itself.
 #   • Unit tests (PYTEST_RUNNING) can pass dummy paths.
 #   • Production caller (get_config) resolves localstore once.
 #
@@ -178,10 +205,18 @@ class PluginConfig(BaseModel):
 
 
 class Config:
-    def __init__(self, user_config: ShitBotConfig, *, cache: Path, data: Path):
+    def __init__(
+        self,
+        user_config: ShitBotConfig,
+        *,
+        cache: Path,
+        data: Path,
+        qq_root: Path,
+    ):
         self._uc = user_config
         self._cache = cache  # already resolved by caller
         self._data = data
+        self._qq_root = qq_root  # already resolved by caller
 
     # -- user-config fields -------------------------------------------
 
@@ -196,12 +231,21 @@ class Config:
         return self._uc.client_data or self._data
 
     @property
+    def client_qq_root(self) -> Path:
+        """Container-side QQ data root; falls back to local qq_root if unset."""
+        return self._uc.client_qq_root or self._qq_root
+
+    @property
     def max_message_depth(self) -> int:
         return self._uc.max_message_depth
 
     @property
     def pixiv_access_token(self) -> str:
         return self._uc.pixiv_access_token
+
+    @property
+    def bilibili_cookie(self) -> str:
+        return self._uc.bilibili_cookie
 
     # -- owners (dotenv only) -----------------------------------------
 
@@ -225,6 +269,10 @@ class Config:
     def data(self) -> Path:
         return self._data
 
+    @property
+    def qq_root(self) -> Path:
+        return self._qq_root
+
 
 # ── Singleton (lazy — unit-test friendly) ───────────────────────────
 
@@ -240,6 +288,7 @@ def get_config() -> Config:
                 ShitBotConfig(),
                 cache=Path("/tmp/shitbot_test_cache"),
                 data=Path("/tmp/shitbot_test_data"),
+                qq_root=Path("/tmp/shitbot_test_qq_root"),
             )
         else:
             # Production: one-shot localstore resolution
@@ -253,6 +302,7 @@ def get_config() -> Config:
                 scoped.shitbot,
                 cache=store.get_plugin_cache_dir(),
                 data=store.get_plugin_data_dir(),
+                qq_root=scoped.shitbot.qq_root or Path("/"),
             )
     return _config
 

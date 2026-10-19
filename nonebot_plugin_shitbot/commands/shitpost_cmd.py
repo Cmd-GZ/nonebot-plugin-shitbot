@@ -11,7 +11,7 @@ import yaml
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 from nonebot.log import logger
 
-from ..aux import is_sha256, validate_schema
+from ..aux import is_sha256, partition_botin_groups, validate_schema
 from ..command import BotCommand
 from ..msgdatabase import BotMsgDataBase
 from ..msgutils import (
@@ -225,12 +225,11 @@ class BotCommandShitpost(BotCommand):
             self._update_meta(sha256, meta)
         await self.send_msg(sha256)
 
-    async def _remove_nonexist_groups(self, groups: list[int]) -> None:
-        exist_groups = [group["group_id"] for group in await self.bot.get_group_list()]
-        nonexist_groups = [group for group in groups if group not in exist_groups]
-        for group in nonexist_groups:
-            await self.send_msg(f"警告: bot不在群组 {group} 中")
-            groups.remove(group)
+    async def _filter_non_botin_groups(self, groups: list[int]) -> list[int]:
+        botin_groups, no_botin_groups = await partition_botin_groups(self.bot, groups)
+        if no_botin_groups:
+            await self.send_msg(f"警告: bot不在群组 {no_botin_groups} 中")
+        return botin_groups
 
     async def _start(self) -> None:
         shitpost_session = BotSession.make("public", "shitpost")
@@ -272,7 +271,7 @@ class BotCommandShitpost(BotCommand):
         if self.session is None:
             return
         self._groups = list(set(groups))
-        await self._remove_nonexist_groups(self._groups)
+        self._groups = await self._filter_non_botin_groups(self._groups)
         group_id = (
             int(self.session.group_id) if self.session.group_id != "private" else None
         )
@@ -303,7 +302,7 @@ class BotCommandShitpost(BotCommand):
             self.unlock()
             return
         self._groups = list(set(groups))
-        await self._remove_nonexist_groups(self._groups)
+        self._groups = await self._filter_non_botin_groups(self._groups)
         group_id = (
             int(self.session.group_id) if self.session.group_id != "private" else None
         )
@@ -382,7 +381,7 @@ class BotCommandShitpost(BotCommand):
         cap = set(self._a).intersection(self._d)
         self._a = list(set(self._a) - cap)
         self._d = list(set(self._d) - cap)
-        await self._remove_nonexist_groups(self._a)
+        self._a = await self._filter_non_botin_groups(self._a)
         for group in self._a:
             if group in new_groups:
                 await self.send_msg(f"警告：群组 {group} 已存在")
@@ -430,7 +429,7 @@ class BotCommandShitpost(BotCommand):
         cap = set(self._a).intersection(self._d)
         self._a = list(set(self._a) - cap)
         self._d = list(set(self._d) - cap)
-        await self._remove_nonexist_groups(self._a)
+        self._a = await self._filter_non_botin_groups(self._a)
         for sha256 in self._sha256s:
             await self._mark__msg(sha256)
         await self.send_msg("更新完毕")
@@ -453,7 +452,7 @@ class BotCommandShitpost(BotCommand):
     async def _send__init_targets(self) -> dict[int | None, list[tuple[str, Message]]]:
         send_map = {}
         self._to = list(set(self._to))
-        await self._remove_nonexist_groups(self._to)
+        self._to = await self._filter_non_botin_groups(self._to)
         for group in self._to:
             send_map[group] = []
         if not send_map and not self._to and self.session:

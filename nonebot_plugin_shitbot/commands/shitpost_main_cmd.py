@@ -9,7 +9,7 @@ import yaml
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import Bot, Message
 
-from ..aux import validate_schema
+from ..aux import partition_botin_groups, validate_schema
 from ..command import BotCommand
 from ..config import config
 from ..msgdatabase import BotMsgDataBase
@@ -56,7 +56,7 @@ class BotCommandShitPostMain(BotCommand):
             "max": 300,
             "is_auto": False,
         }
-        self._exist_groups: list[int] | None = None
+        self._is_inited = False
         self._sender_tasks: dict[int, asyncio.Task] = {}
 
     @classmethod
@@ -163,7 +163,7 @@ class BotCommandShitPostMain(BotCommand):
                 await self._sender__send_msg(group_id)
 
     def sync_senders(self) -> None:
-        if self._exist_groups is None:
+        if not self._is_inited:
             return
         for group_id in self._setting["groups"]:
             task = self._sender_tasks.get(group_id)
@@ -175,11 +175,10 @@ class BotCommandShitPostMain(BotCommand):
             await self.init()
             self.load_setting()
             self.load_metas()
-        self._exist_groups = list(
-            set(group["group_id"] for group in await self.bot.get_group_list())
+        self._setting["groups"], no_botin_groups = await partition_botin_groups(
+            self.bot, self._setting["groups"]
         )
-        for group in list(set(self._setting["groups"])):
-            if all(group != exist_group for exist_group in self._exist_groups):
-                logger.warning(f"bot不在 {group} 中")
-                self._setting["groups"].remove(group)
+        if no_botin_groups:
+            await self.send_msg(f"警告：bot不在群组 {no_botin_groups} 中")
+        self._is_inited = True
         self.sync_senders()

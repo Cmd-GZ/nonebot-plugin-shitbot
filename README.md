@@ -2,6 +2,8 @@
 
 这项目目前是我自用的基于Napcat端的QQ机器人插件，正在逐步完善中
 
+该插件依赖于Napcat端，目前暂不对其他端进行适配
+
 ## 已实现的功能
 
 - 调用ffmpeg将图片转成视频或者添加黑框，使得某些由于各种原因在群里发不出去的图片可以被转换后发送
@@ -51,8 +53,56 @@
 
 ### 安装
 
+#### 本体
+
 ```bash
 nb plugin install nonebot-plugin-shitbot
+```
+
+#### 依赖
+
+##### ffmpeg
+
+`/convert`、`/bilibili`、`/au2rc` 等命令依赖其进行媒体处理
+
+```bash
+# Arch系
+pacman -S ffmpeg
+# Debian系
+apt install ffmpeg
+# macOS
+brew install ffmpeg
+# RedHat系（需先启用 RPM Fusion；ffmpeg-free 缺少 libx264，/convert 用不了）
+dnf install ffmpeg
+# Windows
+# 从 https://ffmpeg.org/download.html 下载后加入 PATH
+```
+
+##### libmagic
+
+`/convert`, `/md2pic` 等命令依赖其进行文件类型识别
+
+```bash
+# Arch系
+pacman -S file
+# Debian系
+apt install libmagic1
+# macOS
+brew install libmagic
+# RedHat系
+dnf install file-libs
+# Windows
+# 无需安装
+```
+
+##### Playwright
+
+`/help`, `/md2pic` 等命令依赖其进行浏览器渲染
+
+```bash
+playwright install chromium
+# 若下载速度过慢可考虑指定镜像源
+PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright playwright install chromium
 ```
 
 ### 环境变量
@@ -61,11 +111,14 @@ nb plugin install nonebot-plugin-shitbot
 
 | 配置项 | 类型 | 默认值 | 是否必填 | 说明 |
 |---|---|---|---|---|
+| `SHITBOT__OWNERS` | JSON 字符串列表 | None | **是** | 机器人所有者 QQ 号列表，如 `'["114514"]'`。未配置时 owners 组为空且无法正常使用bot |
 | `SHITBOT__CLIENT_CACHE` | 路径 | 本地缓存路径 | 否 | 容器端缓存路径。本地缓存路径为 `$LOCALSTORE_CACHE_DIR/nonebot_plugin_shitbot`，容器端需对应挂载 |
 | `SHITBOT__CLIENT_DATA` | 路径 | 本地数据路径 | 否 | 容器端数据路径。本地数据路径为 `$LOCALSTORE_DATA_DIR/nonebot_plugin_shitbot`，容器端需对应挂载 |
-| `SHITBOT__OWNERS` | JSON 字符串列表 | None | 否（强烈建议） | 机器人所有者 QQ 号列表，如 `'["114514"]'`。未配置时 owners 组为空 |
+| `SHITBOT__CLIENT_QQ_ROOT` | 路径 | 原路径（不映射） | 否 | 容器端 QQ 数据根目录，如 `/app/.config/QQ`。需与 `SHITBOT__QQ_ROOT` 成对配置 |
+| `SHITBOT__QQ_ROOT` | 路径 | 原路径（不映射） | 否 | 宿主机端 QQ 数据根目录，如 `/home/user/docker/QQ`。用于读取协议端报告的本地路径（如 `get_record` 返回的语音文件） |
 | `SHITBOT__MAX_MESSAGE_DEPTH` | 整数 | `16` | 否 | 消息解析最大递归深度 |
 | `SHITBOT__PIXIV_ACCESS_TOKEN` | 字符串 | "" | 部分必填 | Pixiv API 访问令牌（使用 `/pixiv` 时必填） |
+| `SHITBOT__BILIBILI_COOKIE` | 字符串 | "" | 否 | B站登录 Cookie，形如 `SESSDATA=xxx%2Cyyy; bili_jct=zzz`。带上可显著降低 `/bilibili` 被风控的概率且允许下载1080p视频 |
 
 ### 触发规则
 
@@ -79,6 +132,7 @@ nb plugin install nonebot-plugin-shitbot
 | `/pixiv` | P站图片检索 |
 | `/bilibili` | B站视频解析与下载 |
 | `/convert` | 图片格式转换 |
+| `/au2rc` | 音频文件转语音发送 |
 | `/shitpost` | 全自动搬史服务与数据库(~~化粪池~~)管理 |
 | `/md2pic` | Markdown 渲染为图片 |
 | `/autoreply` | 自动回复服务与数据库管理 |

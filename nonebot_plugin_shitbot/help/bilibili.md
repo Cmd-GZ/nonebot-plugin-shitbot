@@ -5,8 +5,16 @@
 ## 使用方式
 
 ```bash
-/bilibili [链接或 av 号或 BV 号 ...]
+/bilibili [选项] [链接或 av 号或 BV 号 ...]
 ```
+
+## 选项
+
+| 选项 | 说明 |
+|------|------|
+| `--res <画质>` | 期望的画质，默认 `720` |
+
+`--res` 会尽量选择不超过该值的最高画质；若参数数值低于最低画质则会选择最低画质。
 
 ### 支持的输入
 
@@ -30,10 +38,15 @@
 /bilibili https://www.bilibili.com/video/BV1GJ411x7h7
 /bilibili BV1GJ411x7h7 BV1uv411q7Mv
 
+# 指定画质（必须写在链接前面）
+/bilibili --res 1080 BV1GJ411x7h7
+
 # 回复一条含 B 站链接的消息
 /bilibili
+/bilibili --res 480
 ```
 
 ## 注意
 
 - 使用该命令需要 `bilibili` 权限条目通过
+- 若bot拥有者不设置 cookie，则视频最高可能的画质为 `720P`

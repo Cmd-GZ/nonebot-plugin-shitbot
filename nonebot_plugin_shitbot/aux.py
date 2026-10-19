@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from nonebot.adapters.onebot.v11 import Bot
 from nonebot.log import logger
 
 
@@ -76,6 +77,9 @@ async def stuff_download(
     referer: str | None = None,
 ):
     try:
+        if isinstance(url, str) and url.startswith("file://"):
+            shutil.copyfile(url[7:], output_path)
+            return
         headers = {"Referer": referer} if referer is not None else {}
         async with client.stream(
             "GET", url, headers=headers, follow_redirects=True
@@ -91,3 +95,12 @@ async def stuff_download(
 
 def is_sha256(name: str) -> bool:
     return bool(re.fullmatch(r"[0-9a-f]{64}", name))
+
+
+async def partition_botin_groups(
+    bot: Bot, groups: list[int]
+) -> tuple[list[int], list[int]]:
+    bot_in_groups = set(group["group_id"] for group in await bot.get_group_list())
+    bot_in_res = set(groups).intersection(bot_in_groups)
+    bot_not_in_res = set(groups).difference(bot_in_groups)
+    return list(bot_in_res), list(bot_not_in_res)

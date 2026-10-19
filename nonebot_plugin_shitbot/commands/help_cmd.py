@@ -33,6 +33,7 @@ class BotCommandHelp(BotCommand):
         parser.add_subparser("pixiv")
         parser.add_subparser("autoreply")
         parser.add_subparser("bilibili")
+        parser.add_subparser("au2rc")
         return parser
 
     async def run(self, args: Message):
@@ -72,6 +73,7 @@ class BotCommandHelp(BotCommand):
             "pixiv",
             "autoreply",
             "bilibili",
+            "au2rc",
         ):
             tip = f"错误: 帮助文档 {subcmd}.md 不存在"
             help_path = help_dir / f"{subcmd}.md"

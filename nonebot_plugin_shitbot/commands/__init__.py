@@ -1,4 +1,5 @@
 from ..command import BotCommand
+from .au2rc_cmd import BotCommandAu2rc
 from .autoreply_cmd import BotCommandAutoreply
 from .autoreply_main_cmd import BotCommandAutoReplyMain
 from .bilibili_cmd import BotCommandBilibili
@@ -14,6 +15,7 @@ from .shitpost_main_cmd import BotCommandShitPostMain
 
 __all__ = [
     "BotCommand",
+    "BotCommandAu2rc",
     "BotCommandAutoReplyMain",
     "BotCommandAutoreply",
     "BotCommandBilibili",
