@@ -151,6 +151,7 @@ class BotCommandShitPostMain(BotCommand):
         )
 
     async def _sender(self, group_id: int) -> None:
+        random.seed(time.time() + group_id + random.random())
         while True:
             random_seconds = random.uniform(self._setting["min"], self._setting["max"])
             logger.debug(f"{group_id}: 等待 {random_seconds} 秒")

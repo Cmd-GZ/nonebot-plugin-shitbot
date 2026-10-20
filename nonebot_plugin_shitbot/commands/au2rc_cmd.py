@@ -19,7 +19,6 @@ from ..msgutils import (
 from ..parser import BotArgParser
 
 if TYPE_CHECKING:
-
     from ..session import BotSession
 
 ffmpeg = shutil.which("ffmpeg") or "ffmpeg"

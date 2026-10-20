@@ -2,7 +2,7 @@ from os import environ
 
 # During unit tests, skip importing the heavy handler/command modules.
 # These modules pull in the entire NoneBot stack and external plugins
-# (e.g. nonebot_plugin_htmlrender → get_driver()).  Pure-logic modules
+# (e.g. nonebot_plugin_localstore → get_driver()).  Pure-logic modules
 # like parser.py should remain importable without a running NoneBot.
 if not environ.get("PYTEST_RUNNING"):
     from nonebot import require
@@ -11,7 +11,6 @@ if not environ.get("PYTEST_RUNNING"):
     from . import handlers  # noqa: F401
     from .config import PluginConfig
 
-    require("nonebot_plugin_htmlrender")
     require("nonebot_plugin_localstore")
 
     __plugin_meta__ = PluginMetadata(

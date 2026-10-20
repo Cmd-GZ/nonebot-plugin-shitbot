@@ -6,9 +6,10 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
 from .aux import rm_path
-from .commands import *
+from .commands import *  # noqa: F403
 from .config import config
 from .msgutils import get_reply
+from .render import BotMarkdownRender
 from .session import BotSession
 from .tasks import autoreply_lock, shitpost_lock
 
@@ -89,6 +90,9 @@ driver = get_driver()
 async def startup():
     rm_path(config.cache)
     config.cache.mkdir(parents=True, exist_ok=True)
+
+    render = BotMarkdownRender.make()
+    await render.startup()
     logger.info("nonebot-plugin-shitbot 已加载")
 
 
@@ -122,6 +126,9 @@ async def bot_connect(bot: Bot):
 
 @driver.on_shutdown
 async def shutdown():
+    if BotMarkdownRender.instance is not None:
+        await BotMarkdownRender.instance.shutdown()
+
     commands = [
         cmd
         for session in BotSession.get_sessions()

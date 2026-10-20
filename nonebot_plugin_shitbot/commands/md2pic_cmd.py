@@ -6,19 +6,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from nonebot import require
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
 from PIL import Image
-
-require("nonebot_plugin_htmlrender")
-from nonebot_plugin_htmlrender import md_to_pic
 
 from ..aux import stuff_download
 from ..command import BotCommand
 from ..config import config
 from ..msgutils import dump_message, undump_message
 from ..parser import BotArgParser
+from ..render import BotMarkdownRender
 
 if TYPE_CHECKING:
     from ..session import BotSession
@@ -29,9 +26,10 @@ class BotCommandMd2pic(BotCommand):
 
     def __init__(self, bot: Bot, session: BotSession, *, _pid: int, _internal=None):
         super().__init__(bot, session, _pid=_pid, _internal=_internal)
+        self._mdrender = BotMarkdownRender.make()
         self._md = ""
         self._scale = 2
-        self._css = ""
+        self._css = None
         self._padding = 30
         self._min_w = 20
         self._max_w = 2000
@@ -69,9 +67,11 @@ class BotCommandMd2pic(BotCommand):
         except Exception as e:
             logger.error(f"获取回复消息失败: {e}")
             return
-        for seg in reversed(reply["message"]):
+        for seg in reply["message"]:
             if seg.get("type") == "text":
-                self._md = self._md + seg["data"]["text"]
+                self._md += seg["data"]["text"]
+            if seg.get("type") == "image" and seg["data"].get("url"):
+                self._md += f"![image]({seg['data']['url']})"
         if reply["message"] and reply["message"][0].get("type") == "file":
             msg = await dump_message(self.bot, undump_message(reply["message"]))
             url = msg[0]["data"].get("url", "")
@@ -94,10 +94,9 @@ class BotCommandMd2pic(BotCommand):
 
             mine = magic.from_file(file_path, mime=True)
             if mine == "text/plain":
-                self._md = self._md + file_path.read_text()
+                self._md = file_path.read_text()
 
     async def _render(self) -> bytes:
-
         min_w = int(self._scale * self._min_w)
         max_w = self._max_w
         min_h = int(self._scale * self._min_h)
@@ -106,8 +105,8 @@ class BotCommandMd2pic(BotCommand):
         )
         padding = int(self._scale * self._padding)
 
-        raw = await md_to_pic(
-            self._md, width=max_w, css_path=self._css, device_scale_factor=self._scale
+        raw = await self._mdrender.render(
+            self._md, width=max_w, css_path=self._css, scale=self._scale
         )
         img = Image.open(io.BytesIO(raw))
 
@@ -204,7 +203,9 @@ class BotCommandMd2pic(BotCommand):
 
         self._scale = self._parser.opts_value["-s"][0]
         theme = self._parser.opts_value["-t"][0]
-        self._css = str(Path(__file__).resolve().parent.parent / "css" / f"{theme}.css")
+        self._css = (
+            Path(__file__).resolve().parent.parent / "markdown" / "css" / f"{theme}.css"
+        )
         self._padding = self._parser.opts_value["--padding"][0]
         self._min_w = self._parser.opts_value["--min_w"][0]
         self._max_w = self._parser.opts_value["--max_w"][0]
@@ -214,7 +215,6 @@ class BotCommandMd2pic(BotCommand):
             if len(self._parser.opts_value["--max_h"]) > 0
             else None
         )
-        self._md += self._parser.value[0]
 
         self._scale = max(1, self._scale)
         self._scale = min(50, self._scale)
@@ -231,6 +231,7 @@ class BotCommandMd2pic(BotCommand):
         self._min_h = max(0, self._min_h)
 
         await self._process_reply(args)
+        self._md += self._parser.value[0]
 
         if not self._md:
             await self.send_msg("未检测到有效文本")

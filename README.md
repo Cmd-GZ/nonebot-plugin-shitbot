@@ -142,6 +142,7 @@ PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright playwright ins
 - [ManyACG](https://manyacg.top): 为 /randpic ~~*以及下面的彩蛋*~~ 提供了API
 - [Lolicon APP](https://lolicon.app): 为 /randpic 提供了API
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp): 为 /bilibili 提供视频解析与下载
+- [katex](https://katex.org/): 为 /md2pic 提供了数学公式渲染
 - [github-markdown-css](https://github.com/sindresorhus/github-markdown-css): 为markdown渲染提供了CSS主题
 
 ###### 彩蛋: 千人千面(据说每个人看到的图都不一样):
