@@ -93,7 +93,7 @@ class BotCommandMd2pic(BotCommand):
             import magic
 
             mine = magic.from_file(file_path, mime=True)
-            if mine == "text/plain":
+            if mine.startswith("text/"):
                 self._md = file_path.read_text()
 
     async def _render(self) -> bytes:

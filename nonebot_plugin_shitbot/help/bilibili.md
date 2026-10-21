@@ -13,6 +13,7 @@
 | 选项 | 说明 |
 |------|------|
 | `--res <画质>` | 期望的画质，默认 `720` |
+| `--danmaku` | 下载并硬字幕烧录弹幕（需要 ffmpeg/ffprobe） |
 
 `--res` 会尽量选择不超过该值的最高画质；若参数数值低于最低画质则会选择最低画质。
 
@@ -40,10 +41,11 @@
 
 # 指定画质（必须写在链接前面）
 /bilibili --res 1080 BV1GJ411x7h7
+/bilibili --danmaku av170001
 
 # 回复一条含 B 站链接的消息
 /bilibili
-/bilibili --res 480
+/bilibili --res 480 --danmaku
 ```
 
 ## 注意

@@ -102,20 +102,22 @@ async def bot_connect(bot: Bot):
         await BotCommandAutoReplyMain.init()
     async with shitpost_lock:
         await BotCommandShitPostMain.init()
-    autoreply_auto_path = config.data / "autoreply" / "state.yaml"
-    is_auto = True
+
+    autoreply_auto_path = config.data / "autoreply" / "setting.yaml"
     if autoreply_auto_path.exists():
-        is_auto = yaml.safe_load(autoreply_auto_path.read_text(encoding="utf-8"))
-    if is_auto:
-        session = BotSession.make("public", "autoreply")
-        autoreply_main = BotCommandAutoReplyMain.make(bot, session, _pid=session.curpid)
-        if autoreply_main is not None:
-            await autoreply_main.run(Message())
+        settings = yaml.safe_load(autoreply_auto_path.read_text(encoding="utf-8"))
+        if not isinstance(settings, dict) or settings.get("is_auto", True):
+            session = BotSession.make("public", "autoreply")
+            autoreply_main = BotCommandAutoReplyMain.make(
+                bot, session, _pid=session.curpid
+            )
+            if autoreply_main is not None:
+                await autoreply_main.run(Message())
 
     shitpost_setting_path = config.data / "shitpost" / "setting.yaml"
     if shitpost_setting_path.exists():
         settings = yaml.safe_load(shitpost_setting_path.read_text(encoding="utf-8"))
-        if settings is not None and settings["is_auto"]:
+        if isinstance(settings, dict) and settings.get("is_auto", False):
             session = BotSession.make("public", "shitpost")
             shitpost_main = BotCommandShitPostMain.make(
                 bot, session, _pid=session.curpid

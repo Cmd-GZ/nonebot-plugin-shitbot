@@ -2,7 +2,7 @@ import hashlib
 import re
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args, get_origin
 
 import httpx
 from nonebot.adapters.onebot.v11 import Bot
@@ -14,6 +14,20 @@ def validate_schema(data: Any, schema: Any) -> bool:
         return True
     if schema is None:
         return False
+
+    origin = get_origin(schema)
+    if origin is dict:
+        key_type, value_type = get_args(schema)
+        return isinstance(data, dict) and all(
+            validate_schema(key, key_type) and validate_schema(value, value_type)
+            for key, value in data.items()
+        )
+    if origin is list:
+        (item_type,) = get_args(schema)
+        return isinstance(data, list) and all(
+            validate_schema(item, item_type) for item in data
+        )
+
     if isinstance(schema, type):
         return isinstance(data, schema)
     if isinstance(schema, dict):

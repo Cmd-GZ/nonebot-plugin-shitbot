@@ -1,8 +1,24 @@
+<p align="center">
+  <a href="https://nonebot.dev/"><img src="https://nonebot.dev/logo.png" width="200" height="200" alt="nonebot"></a>
+</p>
+
+<div align="center">
+
 # Shitbot
 
-这项目目前是我自用的基于Napcat端的QQ机器人插件，正在逐步完善中
+_基于Napcat端的自用多功能QQ机器人_
 
-该插件依赖于Napcat端，目前暂不对其他端进行适配
+</div>
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/Cmd-GZ/nonebot-plugin-shitbot/master/LICENSE">
+    <img src="https://img.shields.io/github/license/Cmd-GZ/nonebot-plugin-shitbot" alt="license">
+  </a>
+  <a href="https://pypi.python.org/pypi/nonebot-plugin-shitbot">
+    <img src="https://img.shields.io/pypi/v/nonebot-plugin-shitbot.svg" alt="pypi">
+  </a>
+  <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="python">
+</p>
 
 ## 已实现的功能
 
@@ -105,7 +121,7 @@ playwright install chromium
 PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright playwright install chromium
 ```
 
-### 环境变量
+### 配置项
 
 在 NoneBot 项目的 `.env` 文件中配置，变量如下：
 

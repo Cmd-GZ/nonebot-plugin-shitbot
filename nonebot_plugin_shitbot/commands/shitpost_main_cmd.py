@@ -9,7 +9,7 @@ import yaml
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import Bot, Message
 
-from ..aux import partition_botin_groups, validate_schema
+from ..aux import is_sha256, partition_botin_groups, validate_schema
 from ..command import BotCommand
 from ..config import config
 from ..msgdatabase import BotMsgDataBase
@@ -21,11 +21,13 @@ _SETTING_SCHEMA = {
     "min": int,
     "max": int,
     "is_auto": bool,
+    "local_interval": dict[int, dict[str, int]],
 }
 
 _META_SCHEMA = {
     "sent": [int],
     "failed": int,
+    "quality": int,
     "timestamp": int,
 }
 
@@ -36,6 +38,8 @@ _DEC_COFF = 1.5
 _FAILED_LIMIT = 50
 
 _FAILED_COFF = 3.5
+
+_QUALITY_COFF = 1.5
 
 
 class BotCommandShitPostMain(BotCommand):
@@ -55,6 +59,7 @@ class BotCommandShitPostMain(BotCommand):
             "min": 60,
             "max": 300,
             "is_auto": False,
+            "local_interval": {},
         }
         self._is_inited = False
         self._sender_tasks: dict[int, asyncio.Task] = {}
@@ -62,15 +67,16 @@ class BotCommandShitPostMain(BotCommand):
     @classmethod
     async def init(cls) -> None:
         cls._database = BotMsgDataBase(cls.shitpost_dir)
-        cls.setting_path.touch(exist_ok=True)
         cls.meta_dir.mkdir(exist_ok=True)
         default_setting = {
             "groups": [],
             "min": 60,
             "max": 300,
             "is_auto": False,
+            "local_interval": {},
         }
         if not cls.setting_path.exists():
+            cls.setting_path.touch(exist_ok=True)
             cls.setting_path.write_text(
                 yaml.safe_dump(default_setting, allow_unicode=True), encoding="utf-8"
             )
@@ -89,6 +95,7 @@ class BotCommandShitPostMain(BotCommand):
 
     def _load_meta(self, path: Path) -> None:
         if not path.exists():
+            self._metas.pop(path.name, None)
             return
         try:
             _meta = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -101,6 +108,12 @@ class BotCommandShitPostMain(BotCommand):
     def load_metas(self, sha256s: list[str] | None = None) -> None:
         if not self.meta_dir.exists():
             raise FileNotFoundError
+
+        sha256s = (
+            [sha256 for sha256 in sha256s if is_sha256(sha256)]
+            if sha256s is not None
+            else None
+        )
 
         paths = (
             [self.meta_dir / sha256 for sha256 in sha256s]
@@ -120,18 +133,20 @@ class BotCommandShitPostMain(BotCommand):
             t_stored = value["timestamp"]
             age = t_now - t_stored
             f = value["failed"]
+            q = value["quality"]
             if f >= _FAILED_LIMIT:
                 continue
             if group_id in value["sent"]:
                 continue
             weights[key] = (
-                _DEC_COFF * math.log(age / _FRESH_TIME + 1)
-                + _FAILED_COFF * f
-                - gumbel()
+                -_DEC_COFF * math.log(age / _FRESH_TIME + 1)
+                - _FAILED_COFF * f
+                + _QUALITY_COFF * q
+                + gumbel()
             )
         if not weights:
             return None
-        return min(weights.keys(), key=lambda k: weights[k])
+        return max(weights.keys(), key=lambda k: weights[k])
 
     async def _sender__send_msg(self, group_id: int) -> None:
         msg_hash = self.get_msg_hash(group_id)
@@ -152,12 +167,20 @@ class BotCommandShitPostMain(BotCommand):
 
     async def _sender(self, group_id: int) -> None:
         random.seed(time.time() + group_id + random.random())
+
         while True:
-            random_seconds = random.uniform(self._setting["min"], self._setting["max"])
+            min_time = self._setting["min"]
+            max_time = self._setting["max"]
+            if group_id in self._setting["local_interval"]:
+                min_time = self._setting["local_interval"][group_id].get(
+                    "min", min_time
+                )
+                max_time = self._setting["local_interval"][group_id].get(
+                    "max", max_time
+                )
+            random_seconds = random.uniform(min_time, max_time)
             logger.debug(f"{group_id}: 等待 {random_seconds} 秒")
-            await asyncio.sleep(
-                random.uniform(self._setting["min"], self._setting["max"])
-            )
+            await asyncio.sleep(random_seconds)
             if group_id not in self._setting["groups"]:
                 break
             async with shitpost_lock:

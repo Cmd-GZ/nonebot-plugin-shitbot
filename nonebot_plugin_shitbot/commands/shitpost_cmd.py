@@ -27,6 +27,7 @@ from .shitpost_main_cmd import BotCommandShitPostMain
 _META_SCHEMA = {
     "sent": [int],
     "failed": int,
+    "quality": int,
     "timestamp": int,
 }
 
@@ -52,6 +53,8 @@ class BotCommandShitpost(BotCommand):
         self._before: str | None = None
         self._to: list[int] = []
         self._no_here: bool = False
+        self._quality: int | None = None
+        self._local: int | None = None
         self._groups: list[int] = []
         self._sha256s: list[str] = []
 
@@ -85,9 +88,11 @@ class BotCommandShitpost(BotCommand):
         reply = add.add_subparser("reply")
         begin.set_rule(types=[int])
         begin.add_opt("--no-here")
+        begin.add_opt("-q", required=True, type=int)
         end.set_rule(max=0)
         reply.set_rule(types=[int])
         reply.add_opt("--no-here")
+        reply.add_opt("-q", required=True, type=int)
 
         _del.set_rule()
         _del.add_opt("--sent")
@@ -97,12 +102,14 @@ class BotCommandShitpost(BotCommand):
         _set.set_rule(max=0)
         _set.add_opt("-a", required=True, type=int, max_appeared=None)
         _set.add_opt("-d", required=True, type=int, max_appeared=None)
+        _set.add_opt("--local", required=True, type=int)
         _set.add_opt("--min", required=True, type=int)
         _set.add_opt("--max", required=True, type=int)
 
         mark.set_rule()
         mark.add_opt("-a", required=True, type=int, max_appeared=None)
         mark.add_opt("-d", required=True, type=int, max_appeared=None)
+        mark.add_opt("-q", required=True, type=int)
 
         check.set_rule()
 
@@ -145,7 +152,13 @@ class BotCommandShitpost(BotCommand):
             setting = yaml.safe_load(self._setting_path.read_text(encoding="utf-8"))
         except Exception:
             setting = None
-        return setting or {"groups": [], "min": 60, "max": 300, "is_auto": False}
+        return setting or {
+            "groups": [],
+            "min": 60,
+            "max": 300,
+            "is_auto": False,
+            "local_interval": {},
+        }
 
     def _load_meta(self, sha256: str) -> dict[str, Any] | None:
         try:
@@ -204,10 +217,15 @@ class BotCommandShitpost(BotCommand):
 
     def _del_shit(self, sha256s: list[str]) -> None:
         for sha256 in sha256s:
+            if not is_sha256(sha256):
+                continue
             self._database.dec_msg_rc(sha256)
             self._database.del_msg(sha256)
-            if is_sha256(sha256):
-                (self._meta_dir / sha256).unlink(missing_ok=True)
+            (self._meta_dir / sha256).unlink(missing_ok=True)
+
+        main_command = self._get_service()
+        if main_command is not None:
+            main_command.load_metas(sha256s)
 
     async def _store_shit(self, msg: Message | DumpedMsg) -> None:
         dumped_msg = (
@@ -220,8 +238,15 @@ class BotCommandShitpost(BotCommand):
                 return
             meta = self._load_meta(sha256)
             if meta is None:
-                meta = {"timestamp": int(time.time()), "failed": 0, "sent": []}
+                meta = {
+                    "timestamp": int(time.time()),
+                    "failed": 0,
+                    "quality": 0,
+                    "sent": [],
+                }
             meta["sent"] = list(set(meta["sent"] + self._groups))
+            if self._quality is not None:
+                meta["quality"] = self._quality
             self._update_meta(sha256, meta)
         await self.send_msg(sha256)
 
@@ -369,9 +394,12 @@ class BotCommandShitpost(BotCommand):
             if meta["timestamp"] <= before_stamp:
                 useless_sha256s.add(sha256)
 
+        if not useless_sha256s:
+            await self.send_msg("警告: 未找到符合条件的史")
+
         async with shitpost_lock:
             self._del_shit(list(useless_sha256s))
-        await self.send_msg("删除成功")
+        await self.send_msg("删除完毕")
         self.unlock()
 
     async def _set(self) -> None:
@@ -385,18 +413,60 @@ class BotCommandShitpost(BotCommand):
         for group in self._a:
             if group in new_groups:
                 await self.send_msg(f"警告：群组 {group} 已存在")
+                continue
             new_groups.append(group)
         for group in self._d:
             if group not in new_groups:
                 await self.send_msg(f"警告：群组 {group} 不存在")
                 continue
             new_groups.remove(group)
+            setting["local_interval"].pop(group, None)
         setting["groups"] = new_groups
-        new_min = self._min if self._min is not None else setting["min"]
-        new_max = self._max if self._max is not None else setting["max"]
+
+        if self._local is not None and self._local not in new_groups:
+            await self.send_msg(
+                f"警告: 群组 {self._local} 不在群组列表中，将忽略可能的--min, --max更改"
+            )
+            async with shitpost_lock:
+                self._update_setting(setting)
+            await self.send_msg("设置完毕")
+            self.unlock()
+            return
+
+        old_min = setting["min"]
+        old_max = setting["max"]
+        if (
+            self._local is not None
+            and setting["local_interval"].get(self._local, {}).get("min") is not None
+        ):
+            old_min = setting["local_interval"][self._local]["min"]
+        if (
+            self._local is not None
+            and setting["local_interval"].get(self._local, {}).get("max") is not None
+        ):
+            old_max = setting["local_interval"][self._local]["max"]
+
+        new_min = self._min if self._min is not None else old_min
+        new_max = self._max if self._max is not None else old_max
+
         if new_min > new_max or new_min < 0 or new_max < 0:
             await self.send_msg("警告：最小值大于最大值或有小于0的值, 将忽略此项")
-        else:
+            async with shitpost_lock:
+                self._update_setting(setting)
+            await self.send_msg("设置完毕")
+            self.unlock()
+            return
+        if (
+            self._local is not None
+            and setting["local_interval"].get(self._local) is None
+            and (self._min is not None or self._max is not None)
+        ):
+            setting["local_interval"][self._local] = {"min": old_min, "max": old_max}
+        if self._local is not None and self._min is not None:
+            setting["local_interval"][self._local]["min"] = self._min
+        if self._local is not None and self._max is not None:
+            setting["local_interval"][self._local]["max"] = self._max
+        if self._local is None:
             setting["min"] = new_min
             setting["max"] = new_max
         async with shitpost_lock:
@@ -423,6 +493,8 @@ class BotCommandShitpost(BotCommand):
                 await self.send_msg(f"警告：{sha256} 不存在")
                 return
             await self._mark__sent(meta)
+            if self._quality is not None:
+                meta["quality"] = self._quality
             self._update_meta(sha256, meta)
 
     async def _mark(self) -> None:
@@ -438,15 +510,18 @@ class BotCommandShitpost(BotCommand):
     async def _check(self) -> None:
         if self._reply is not None:
             async with shitpost_lock:
-                reply_sha256 = await self._database.has_msg(self._reply)
-            if reply_sha256 is None:
-                await self.send_msg(f"被回复的信息: {False}")
+                reply_sha256 = await self._database.get_sha256(self._reply)
+                has_sha256 = await self._database.has_msg(reply_sha256)
+            if has_sha256 is None:
+                await self.send_msg(f"被回复的信息({reply_sha256}): {False}")
             else:
                 await self.send_msg(f"被回复的信息({reply_sha256}): {True}")
         for sha256 in self._sha256s:
             async with shitpost_lock:
                 meta = self._load_meta(sha256)
             await self.send_msg(f"{sha256}: {meta is not None}")
+        if self._reply is None and not self._sha256s:
+            await self.send_msg("错误: 未收到有效信息")
         self.unlock()
 
     async def _send__init_targets(self) -> dict[int | None, list[tuple[str, Message]]]:
@@ -496,6 +571,8 @@ class BotCommandShitpost(BotCommand):
         if not self._meta_dir.exists():
             return
         file_list = list(self._meta_dir.iterdir())
+        if not file_list:
+            await self.send_msg("警告: 粪坑空了")
         if any(value for value in send_map.values()) or all(
             not f.is_file() for f in file_list
         ):
@@ -544,7 +621,8 @@ class BotCommandShitpost(BotCommand):
             f"当前库内史存量：{shit_count}\n"
             + f"当前目标群组：{setting['groups']}\n"
             + f"当前最小发送时间间隔：{setting['min']}\n"
-            + f"当前最大发送时间间隔：{setting['max']}"
+            + f"当前最大发送时间间隔：{setting['max']}\n"
+            + f"局部间隔设置：{setting['local_interval']}"
         )
         self.unlock()
 
@@ -593,6 +671,8 @@ class BotCommandShitpost(BotCommand):
             self._no_here = bool(
                 subparser.subparsers[subsubcmd].opts_value.get("--no-here")
             )
+            _q = subparser.subparsers[subsubcmd].opts_value.get("-q")
+            self._quality = _q[0] if _q else None
         if subcmd in ["del", "mark", "check", "send"]:
             self._sha256s = subparser.value
         if subcmd == "del":
@@ -606,11 +686,16 @@ class BotCommandShitpost(BotCommand):
                 self._a = _a
             if _d := subparser.opts_value.get("-d"):
                 self._d = _d
+            if _local := subparser.opts_value.get("--local"):
+                self._local = _local[0]
         if subcmd == "set":
             if _min := subparser.opts_value.get("--min"):
                 self._min = _min[0]
             if _max := subparser.opts_value.get("--max"):
                 self._max = _max[0]
+        if subcmd == "mark":
+            if _q := subparser.opts_value.get("-q"):
+                self._quality = _q[0]
         if subcmd == "send" and self._check_perm("shitpostmanager"):
             self._to = subparser.opts_value.get("--to", [])
 

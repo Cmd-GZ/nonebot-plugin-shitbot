@@ -1,10 +1,11 @@
 [project]
 name = "nonebot-plugin-shitbot"
-version = "0.10.0"
+version = "1.0.0"
 description = "NoneBot shitpost plugin"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
+readme = "README.md"
 dependencies = [
     "nonebot2>=2.5.0",
     "nonebot-adapter-onebot>=2.4.6",
@@ -24,6 +25,7 @@ dependencies = [
     "pygments>=2.14",
     "playwright>=1.48.0",
     "nh3>=0.2",
+    "biliass>=2.5.0",
 ]
 
 [dependency-groups]

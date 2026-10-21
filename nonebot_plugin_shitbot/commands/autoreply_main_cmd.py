@@ -25,7 +25,7 @@ _TERM_SCHEMA = {
 class BotCommandAutoReplyMain(BotCommand):
     _name = "autoreply_main_rec"
     autoreply_dir = config.data / "autoreply"
-    state_path = autoreply_dir / "state.yaml"
+    setting_path = autoreply_dir / "setting.yaml"
     rule_path = autoreply_dir / "rule.yaml"
     msg_table_path = autoreply_dir / "msg_table.yaml"
     _rule: dict[str, dict[str, Any]]
@@ -39,15 +39,22 @@ class BotCommandAutoReplyMain(BotCommand):
         cls._database = BotMsgDataBase(cls.autoreply_dir)
         cls._rule = {}
         cls._msg_table = {}
-        cls.state_path.touch(exist_ok=True)
         cls.rule_path.touch(exist_ok=True)
         cls.msg_table_path.touch(exist_ok=True)
+        default_setting = {
+            "is_auto": True,
+        }
+        if not cls.setting_path.exists():
+            cls.setting_path.touch(exist_ok=True)
+            cls.setting_path.write_text(
+                yaml.safe_dump(default_setting, allow_unicode=True), encoding="utf-8"
+            )
 
     def load_meta(self):
         if (
             not self.rule_path.exists()
             or not self.msg_table_path.exists()
-            or not self.state_path.exists()
+            or not self.setting_path.exists()
         ):
             raise FileNotFoundError
         _rule = yaml.safe_load(self.rule_path.read_text(encoding="utf-8"))

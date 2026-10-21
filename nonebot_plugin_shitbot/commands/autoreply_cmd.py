@@ -22,7 +22,7 @@ from .autoreply_main_cmd import BotCommandAutoReplyMain
 class BotCommandAutoreply(BotCommand):
     _name = "autoreply"
     _autoreply_dir = BotCommandAutoReplyMain.autoreply_dir
-    _state_path = BotCommandAutoReplyMain.state_path
+    _setting_path = BotCommandAutoReplyMain.setting_path
     _rule_path = BotCommandAutoReplyMain.rule_path
     _msg_table_path = BotCommandAutoReplyMain.msg_table_path
 
@@ -248,8 +248,8 @@ class BotCommandAutoreply(BotCommand):
         else:
             await main_command.run(Message())
         if self._auto:
-            self._state_path.write_text(
-                yaml.safe_dump(True, allow_unicode=True), encoding="utf-8"
+            self._setting_path.write_text(
+                yaml.safe_dump({"is_auto": True}, allow_unicode=True), encoding="utf-8"
             )
         await self.send_msg("自动回复已开启")
         self.unlock()
@@ -268,8 +268,8 @@ class BotCommandAutoreply(BotCommand):
 
         await _exe()
         if self._auto:
-            self._state_path.write_text(
-                yaml.safe_dump(False, allow_unicode=True), encoding="utf-8"
+            self._setting_path.write_text(
+                yaml.safe_dump({"is_auto": False}, allow_unicode=True), encoding="utf-8"
             )
         await self.send_msg("自动回复已关闭")
         self.unlock()
@@ -499,7 +499,7 @@ class BotCommandAutoreply(BotCommand):
     async def run(self, args: Message):
         async with autoreply_lock:
             self._database = BotMsgDataBase(self._autoreply_dir)
-            self._state_path.touch(exist_ok=True)
+            self._setting_path.touch(exist_ok=True)
             self._rule_path.touch(exist_ok=True)
             self._msg_table_path.touch(exist_ok=True)
             self._load_meta()

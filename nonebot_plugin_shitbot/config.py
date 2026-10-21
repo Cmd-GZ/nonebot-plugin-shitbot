@@ -199,7 +199,7 @@ class PluginConfig(BaseModel):
 #   • Unit tests (PYTEST_RUNNING) can pass dummy paths.
 #   • Production caller (get_config) resolves localstore once.
 #
-# Config does NOT handle autoreply state — that is the responsibility
+# Config does NOT handle autoreply settings — that is the responsibility
 # of autoreply_cmd.py / handlers.py, which read/write data/autoreply/
 # directly via config.data.
 
