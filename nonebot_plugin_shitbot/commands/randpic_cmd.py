@@ -91,6 +91,16 @@ class BotCommandRandpic(BotCommand):
             pic["source_url"] = f"https://www.pixiv.net/artworks/{pic['pid']}"
             pic["artist"] = {"name": pic["author"]}
             pic["pictures"] = [pic["urls"]]
+            pic["pictures"] = [
+                {
+                    "regular": p.get("regular") or p.get("thumbnail") or "",
+                    "original": p.get("original")
+                    or p.get("regular")
+                    or p.get("thumbnail")
+                    or "",
+                }
+                for p in (pic.get("pictures") or [])
+            ]
 
         return pics
 
@@ -127,7 +137,7 @@ class BotCommandRandpic(BotCommand):
                 logger.info("发送图片成功")
             except Exception as e:
                 logger.error(f"发送图片失败: {e}")
-                text += f"\n图片发送失败, 大概率被河蟹了, 请尝试私聊使用该命令\n{e}"
+                text += f"\n图片发送失败, 大概率被河蟹了, 请尝试私聊使用该命令"
                 await self.send_msg(text)
 
     async def run(self, args: Message):
