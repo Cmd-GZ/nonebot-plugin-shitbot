@@ -57,10 +57,14 @@ class BotCommand:
     #    _sentinel: used to prevent from calling __init__ directly
     # fields:
     #    _bot: bot
-    #    _session: the command's session
+    #    _session: the command's session (None after unlock)
+    #    _user_id / _group_id: cached session identity
+    #    _pid: command's id in its session
+    #    _cache_dir: per-command cache directory
     #    _argv: current arguments of the command, which is also represented as the command's state
     #    _parser: arguments parser used to parse arguments
-    #    _pid: command's id in its session
+    #    _run_tasks / _roger_tasks: tasks currently executing run() / roger()
+    #    _inner_tasks / _inner_cmds: tasks and nested commands owned by this command
     _argv: list[str] | None
     _sentinel = object()
     _name = "otherwise"
@@ -78,9 +82,12 @@ class BotCommand:
             raise TypeError("Please use BotCommand.make() instead of BotCommand()")
         self._bot = bot
         self._session = session
+        self._user_id = self._session.user_id
+        self._group_id = self._session.group_id
+        self._pid = _pid
+        self._cache_dir = config.cache / self.group_id / self.user_id / str(self._pid)
         self._argv = None
         self._parser = self._init_parser()
-        self._pid = _pid
         self._run_tasks: set[asyncio.Task] = set()
         self._roger_tasks: set[asyncio.Task] = set()
         self._inner_tasks: set[asyncio.Task] = set()
@@ -110,16 +117,24 @@ class BotCommand:
         return self._session
 
     @property
+    def user_id(self):
+        return self._user_id
+
+    @property
+    def group_id(self):
+        return self._group_id
+
+    @property
+    def pid(self):
+        return self._pid
+
+    @property
     def name(self):
         return self._name
 
     @property
     def argv(self):
         return self._argv
-
-    @property
-    def pid(self):
-        return self._pid
 
     @property
     def run_tasks(self):
@@ -144,7 +159,7 @@ class BotCommand:
         await self._send_format_error()
         return False
 
-    async def _guard_state(self):
+    async def _guard_state(self, *args, **kwargs):
         if self._argv is not None:
             if (
                 self._session is None
@@ -168,9 +183,9 @@ class BotCommand:
             return
         gid, uid = group_id, user_id
         if gid is None:
-            gid = self.session.group_id
+            gid = self.group_id
         if uid is None:
-            uid = self.session.user_id
+            uid = self.user_id
         if gid == "public":
             return
         if gid == "private":
@@ -182,10 +197,8 @@ class BotCommand:
         await send_msg(bot=self.bot, group_id=gid, user_id=uid, msg=msg)
 
     def _check_perm(self, entry_name: str):
-        if not self.session:
-            return False
         return get_permissions().check_permission(
-            entry_name, self.session.group_id, self.session.user_id
+            entry_name, self.group_id, self.user_id
         )
 
     def _create_task(self, coro) -> asyncio.Task:
@@ -194,22 +207,27 @@ class BotCommand:
         task.add_done_callback(self._inner_tasks.discard)
         return task
 
-    def _rm_cache(self):
-        if not self.session:
+    def _create_cmd(self, cls: type) -> BotCommand | None:
+        if self.session is None:
             return
-        cache_path = (
-            config.cache / self.session.group_id / self.session.user_id / str(self._pid)
-        )
-        rm_path(cache_path)
+        _pid = -1
+        pids = self.session.commands.keys()
+        while _pid in pids:
+            _pid -= 1
+        cmd = cls.make(self.bot, self.session, _pid=_pid)
+        if cmd is None:
+            return
+        self._inner_cmds.append(cmd)
+        return cmd
+
+    def _rm_cache(self):
+        rm_path(self._cache_dir)
 
     async def roger(self, event: MessageEvent):
         pass
 
     # Main function
     async def run(self, args: Message):
-        if not self.session:
-            self.unlock()
-            return
         if not self._check_perm("otherwise"):
             self.unlock()
             return

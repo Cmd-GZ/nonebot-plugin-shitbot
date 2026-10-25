@@ -111,27 +111,21 @@ class BotCommandPerm(BotCommand):
         return exp
 
     async def _check(self):
-        if self.session is None:
-            return
         permissions = get_permissions()
         keys = permissions.entries.keys()
         tip = "权限状态概览:\n"
-        tip += f"用户ID: {self.session.user_id}, 群组ID: {self.session.group_id}\n"
+        tip += f"用户ID: {self.user_id}, 群组ID: {self.group_id}\n"
         for key in keys:
             des = permissions.entries[key]["description"]
-            enable = permissions.check_permission(
-                key, self.session.group_id, self.session.user_id
-            )
+            enable = permissions.check_permission(key, self.group_id, self.user_id)
             if key == "permmanager":
                 enable = enable or permissions.owners_check_permission(
-                    key, self.session.group_id, self.session.user_id
+                    key, self.group_id, self.user_id
                 )
             tip += f"{des}: {enable}\n"
         await self.send_msg(tip)
 
     async def _list(self):
-        if self.session is None:
-            return
         permissions = get_permissions()
         keys = []
         tip = ""
@@ -157,8 +151,6 @@ class BotCommandPerm(BotCommand):
         await self.send_msg(tip)
 
     async def _info(self):
-        if self.session is None:
-            return
         permissions = get_permissions()
         tip = "权限元素信息:\n"
         for title, elems, elemsdic in (
@@ -172,7 +164,7 @@ class BotCommandPerm(BotCommand):
         await self.send_msg(tip)
 
     async def _perm_group(self, mode: str):
-        if self.session is None or mode not in ["create", "delete"]:
+        if mode not in ["create", "delete"]:
             return
         permissions = get_permissions()
         verb = "创建" if mode == "create" else "删除"
@@ -204,7 +196,7 @@ class BotCommandPerm(BotCommand):
             await self.send_msg(f"{verb}失败：{e}")
 
     async def _perm_mem(self, mode: str):
-        if self.session is None or mode not in ["add", "remove"]:
+        if mode not in ["add", "remove"]:
             return
         permissions = get_permissions()
         verb = "添加" if mode == "add" else "移除"
@@ -249,8 +241,6 @@ class BotCommandPerm(BotCommand):
             await self.send_msg(f"{verb}失败：{e}")
 
     async def _whitelist(self):
-        if self.session is None:
-            return
         permissions = get_permissions()
         try:
             is_edited = False
@@ -267,7 +257,7 @@ class BotCommandPerm(BotCommand):
             await self.send_msg(f"设置失败：{e}")
 
     async def _perm_entry(self, mode: str):
-        if self.session is None or mode not in ["whites", "blacks"]:
+        if mode not in ["whites", "blacks"]:
             return
         permissions = get_permissions()
         adj = "白" if mode == "whites" else "黑"
@@ -304,9 +294,6 @@ class BotCommandPerm(BotCommand):
             await self.send_msg(f"设置失败：{e}")
 
     async def run(self, args: Message):
-        if not self.session:
-            return
-
         permissions = get_permissions()
         new_argv = args.extract_plain_text().strip().split()
         if not await self._legal_case(new_argv):
@@ -327,7 +314,7 @@ class BotCommandPerm(BotCommand):
         subsubcmd = None
 
         no_manager = not permissions.owners_check_permission(
-            "permmanager", self.session.group_id, self.session.user_id
+            "permmanager", self.group_id, self.user_id
         ) and not self._check_perm("permmanager")
 
         if (no_manager and subcmd != "check") or (
@@ -372,7 +359,7 @@ class BotCommandPerm(BotCommand):
             for temp in temp_A:
                 self._A.remove(temp)
 
-        if self.session.user_id not in permissions.users.get("owners", []) and (
+        if self.user_id not in permissions.users.get("owners", []) and (
             ("admins" in self._U and subcmd not in ("list", "info"))
             or ("owners" in self._U and subcmd not in ("list", "info"))
             or (self._t == "users" and ("admins" in self._A or "admins" in self._R))

@@ -293,13 +293,9 @@ class BotCommandShitpost(BotCommand):
         self.unlock()
 
     async def _add_begin(self, groups: list[int]) -> None:
-        if self.session is None:
-            return
         self._groups = list(set(groups))
         self._groups = await self._filter_non_botin_groups(self._groups)
-        group_id = (
-            int(self.session.group_id) if self.session.group_id != "private" else None
-        )
+        group_id = int(self.group_id) if self.group_id != "private" else None
         self._groups += (
             [group_id]
             if not self._no_here
@@ -319,8 +315,6 @@ class BotCommandShitpost(BotCommand):
             self.unlock()
 
     async def _add_reply(self, groups: list[int]) -> None:
-        if self.session is None:
-            return
         self._astate = "reply"
         if self._reply is None:
             await self.send_msg("错误: 未识别到被回复信息")
@@ -328,9 +322,7 @@ class BotCommandShitpost(BotCommand):
             return
         self._groups = list(set(groups))
         self._groups = await self._filter_non_botin_groups(self._groups)
-        group_id = (
-            int(self.session.group_id) if self.session.group_id != "private" else None
-        )
+        group_id = int(self.group_id) if self.group_id != "private" else None
         self._groups += (
             [group_id]
             if not self._no_here
@@ -498,10 +490,23 @@ class BotCommandShitpost(BotCommand):
             self._update_meta(sha256, meta)
 
     async def _mark(self) -> None:
+        if self._reply is not None:
+            async with shitpost_lock:
+                reply_sha256 = await self._database.get_sha256(self._reply)
+                has_sha256 = await self._database.has_msg(reply_sha256)
+            if has_sha256 is None:
+                await self.send_msg(f"警告: 被回复的信息({reply_sha256})不存在")
+            else:
+                self._sha256s.append(has_sha256)
         cap = set(self._a).intersection(self._d)
         self._a = list(set(self._a) - cap)
         self._d = list(set(self._d) - cap)
         self._a = await self._filter_non_botin_groups(self._a)
+        self._sha256s = list(set(self._sha256s))
+        if not self._sha256s:
+            await self.send_msg("错误: 未收到有效信息")
+            self.unlock()
+            return
         for sha256 in self._sha256s:
             await self._mark__msg(sha256)
         await self.send_msg("更新完毕")
@@ -530,12 +535,8 @@ class BotCommandShitpost(BotCommand):
         self._to = await self._filter_non_botin_groups(self._to)
         for group in self._to:
             send_map[group] = []
-        if not send_map and not self._to and self.session:
-            group_id = (
-                int(self.session.group_id)
-                if self.session.group_id != "private"
-                else None
-            )
+        if not send_map and not self._to:
+            group_id = int(self.group_id) if self.group_id != "private" else None
             send_map[group_id] = []
         return send_map
 
@@ -633,8 +634,6 @@ class BotCommandShitpost(BotCommand):
             await self._store_shit(event.message)
 
     async def run(self, args: Message) -> None:
-        if not self.session:
-            return
         async with shitpost_lock:
             self._database = BotMsgDataBase(self._shitpost_dir)
         new_argv = args.extract_plain_text().strip().split()

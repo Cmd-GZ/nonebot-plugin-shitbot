@@ -494,7 +494,7 @@ class BotCommandAutoreply(BotCommand):
                 reply_name = getattr(self, "_reply_name", None)
                 if reply_name is None:
                     raise ValueError
-                asyncio.create_task(self.run(Message(f"reply {reply_name} stop")))
+                self._create_task(self.run(Message(f"reply {reply_name} stop")))
 
     async def run(self, args: Message):
         async with autoreply_lock:
@@ -504,8 +504,6 @@ class BotCommandAutoreply(BotCommand):
             self._msg_table_path.touch(exist_ok=True)
             self._load_meta()
 
-        if not self.session:
-            return
         new_argv = args.extract_plain_text().strip().split()
 
         if not await self._legal_case(new_argv):

@@ -86,16 +86,12 @@ class BotCommandHelp(BotCommand):
             tip,
         )
 
-        _pid = -1
-        pids = self.session.commands.keys()
-        while _pid in pids:
-            _pid -= 1
-        md2pic = BotCommandMd2pic.make(self.bot, self.session, _pid=_pid)
+        md2pic = self._create_cmd(BotCommandMd2pic)
         if md2pic is None:
+            self.unlock()
             return
         tip = "-c\n" + tip
         msg = Message(tip)
         inner_task = self._create_task(md2pic.run(msg))
-        self._inner_cmds.append(md2pic)
         await asyncio.gather(inner_task, return_exceptions=True)
         self.unlock()

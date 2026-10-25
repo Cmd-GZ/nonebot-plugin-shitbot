@@ -281,9 +281,6 @@ class BotCommandBilibili(BotCommand):
             await self.send_msg("视频发送失败")
 
     async def run(self, args: Message):
-        if not self.session:
-            return
-
         new_argv = args.extract_plain_text().strip().split()
         if not await self._legal_case(new_argv):
             if self._argv is None:
@@ -317,13 +314,7 @@ class BotCommandBilibili(BotCommand):
             return
 
         # Download videos
-        videos_dir = (
-            config.cache
-            / self.session.group_id
-            / self.session.user_id
-            / str(self._pid)
-            / "videos"
-        )
+        videos_dir = self._cache_dir / "videos"
         res = self._parser.opts_value["--res"][0]
         if_danmaku = bool(self._parser.opts_value["--danmaku"][0])
         videos_dir.mkdir(parents=True, exist_ok=True)

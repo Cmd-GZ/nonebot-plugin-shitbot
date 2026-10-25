@@ -12,7 +12,6 @@ from PIL import Image
 
 from ..aux import stuff_download
 from ..command import BotCommand
-from ..config import config
 from ..msgutils import dump_message, undump_message
 from ..parser import BotArgParser
 from ..render import BotMarkdownRender
@@ -56,9 +55,6 @@ class BotCommandMd2pic(BotCommand):
         return parser
 
     async def _process_reply(self, args: Message):
-        if not self.session:
-            return
-
         if not args or args[0].type != "reply":
             return
         reply = {"message": []}
@@ -75,13 +71,7 @@ class BotCommandMd2pic(BotCommand):
         if reply["message"] and reply["message"][0].get("type") == "file":
             msg = await dump_message(self.bot, undump_message(reply["message"]))
             url = msg[0]["data"].get("url", "")
-            file_dir = (
-                config.cache
-                / self.session.group_id
-                / self.session.user_id
-                / str(self._pid)
-                / "files"
-            )
+            file_dir = self._cache_dir / "files"
             file_dir.mkdir(parents=True, exist_ok=True)
             file_path = file_dir / f"{uuid.uuid4().hex}"
             try:
@@ -179,9 +169,6 @@ class BotCommandMd2pic(BotCommand):
         return buf.getvalue()
 
     async def run(self, args: Message):
-        if not self.session:
-            return
-
         new_argss = args.extract_plain_text().split("\n", 1)
         new_argv = new_argss[0].strip().split()
         new_argv.append(new_argss[1]) if len(new_argss) > 1 else new_argv.append("")

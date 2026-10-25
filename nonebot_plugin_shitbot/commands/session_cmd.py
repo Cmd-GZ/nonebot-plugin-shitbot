@@ -53,8 +53,6 @@ class BotCommandSession(BotCommand):
         subcmd = self._parser.subcmd
 
         if subcmd == "switch":
-            if self._parser.subparsers[subcmd].value is None:
-                return  # Also impossible
             pid = self._parser.subparsers[subcmd].value[0]
 
             if pid <= 0:

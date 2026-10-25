@@ -50,7 +50,7 @@ async def cmd_handler(
     scmd = session.commands.get(_pid)
 
     if not scmd:
-        tip = "未知错误: 会话command字段为None"
+        tip = "未知错误: 会话command属性为None"
         await matcher.finish(tip)
 
     if not command and scmd.name != cmdname:

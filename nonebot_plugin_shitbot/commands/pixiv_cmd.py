@@ -72,9 +72,6 @@ class BotCommandPixiv(BotCommand):
         return urls
 
     async def run(self, args: Message):
-        if not self.session:
-            return
-
         new_argv = args.extract_plain_text().strip().split()
         if not await self._legal_case(new_argv):
             if self._argv is None:
@@ -125,13 +122,7 @@ class BotCommandPixiv(BotCommand):
                 MessageSegment("text", {"text": f"标题: {title}\n作者: {author}\n"})
             )
             count = 0
-            image_dir = (
-                config.cache
-                / self.session.group_id
-                / self.session.user_id
-                / str(self._pid)
-                / "images"
-            )
+            image_dir = self._cache_dir / "images"
             image_dir.mkdir(parents=True, exist_ok=True)
             for url in urls:
                 seg = MessageSegment("image", {"url": url})

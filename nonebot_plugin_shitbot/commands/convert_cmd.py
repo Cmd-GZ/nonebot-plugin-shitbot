@@ -226,8 +226,6 @@ class BotCommandConvert(BotCommand):
         return str(frame_path)
 
     async def _send_outputs(self):
-        if not self.session:
-            return
         outputs = []
         while True:
             output = await self._outputs.get()
@@ -237,7 +235,7 @@ class BotCommandConvert(BotCommand):
                 continue
             outputs.append(output)
 
-        logger.info(f"用户 {self.session.user_id} 结束收集，共收到 {len(outputs)} 张")
+        logger.info(f"用户 {self.user_id} 结束收集，共收到 {len(outputs)} 张")
 
         if len(outputs) == 0:
             await self.send_msg("没有输出被生成。")
@@ -297,29 +295,9 @@ class BotCommandConvert(BotCommand):
         return await dump_message(self.bot, undump_message(reply["message"]))
 
     async def _convert_start(self):
-        if not self.session:
-            return
-        downloads_dir = (
-            config.cache
-            / self.session.group_id
-            / self.session.user_id
-            / str(self._pid)
-            / "downloads"
-        )
-        pngs_dir = (
-            config.cache
-            / self.session.group_id
-            / self.session.user_id
-            / str(self._pid)
-            / "pngs"
-        )
-        outputs_dir = (
-            config.cache
-            / self.session.group_id
-            / self.session.user_id
-            / str(self._pid)
-            / "outputs"
-        )
+        downloads_dir = self._cache_dir / "downloads"
+        pngs_dir = self._cache_dir / "pngs"
+        outputs_dir = self._cache_dir / "outputs"
 
         downloads_dir.mkdir(parents=True, exist_ok=True)
         pngs_dir.mkdir(parents=True, exist_ok=True)
@@ -335,8 +313,6 @@ class BotCommandConvert(BotCommand):
                         client,
                         downloads_dir,
                     )
-            except asyncio.CancelledError:
-                pass
             except Exception as e:
                 logger.exception(f"urls_to_downloads 管道异常退出: {e}")
 
@@ -345,8 +321,6 @@ class BotCommandConvert(BotCommand):
                 await prod_cons(
                     self._downloads, self._pngs, self._download_to_png, pngs_dir
                 )
-            except asyncio.CancelledError:
-                pass
             except Exception as e:
                 logger.exception(f"downloads_to_pngs 管道异常退出: {e}")
 
@@ -361,8 +335,6 @@ class BotCommandConvert(BotCommand):
                         await prod_cons(
                             self._pngs, self._outputs, self._png_to_frame, outputs_dir
                         )
-            except asyncio.CancelledError:
-                pass
             except Exception as e:
                 logger.exception(f"pngs_to_outputs 管道异常退出: {e}")
 
@@ -371,11 +343,8 @@ class BotCommandConvert(BotCommand):
         self._create_task(_pngs_to_outputs())
 
         self._if_accept_pic = True
-        return
 
     async def _convert_stop(self):
-        if not self.session:
-            return
         self._if_accept_pic = False
 
         await self.send_msg("转换图片中...")
@@ -388,7 +357,6 @@ class BotCommandConvert(BotCommand):
 
         await self._send_outputs()
         self.unlock()
-        return
 
     async def _convert_reply(self, reply: DumpedMsg | None):
         if reply is None:
@@ -418,8 +386,6 @@ class BotCommandConvert(BotCommand):
 
     async def run(self, args: Message):
         async with self._runlock:
-            if not self.session:
-                return
 
             new_argv = args.extract_plain_text().strip().split()
             if not await self._legal_case(new_argv):
@@ -446,7 +412,7 @@ class BotCommandConvert(BotCommand):
 
             if subcmd == "start":
                 await self._convert_start()
-                logger.info(f"用户 {self.session.user_id} 开始了图片收集")
+                logger.info(f"用户 {self.user_id} 开始了图片收集")
                 await self.send_msg(
                     "图片收集已开始， Bot 会收集本条信息后你发送的所有图片，直到你发送 /convert stop 完成收集。"
                 )

@@ -8,7 +8,6 @@ from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 from nonebot.log import logger
 
 from ..command import BotCommand
-from ..config import config
 from ..msgutils import dump_message, get_downloaded_msg
 from ..parser import BotArgParser
 
@@ -105,17 +104,9 @@ class BotCommandRandpic(BotCommand):
         return pics
 
     async def _send_pics(self, pics: list[dict[str, Any]]):
-        if not self.session:
-            return
         if len(pics) < self._num:
             await self.send_msg(f"未找到指定数量的图片，仅找到 {len(pics)} 张")
-        image_dir = (
-            config.cache
-            / self.session.group_id
-            / self.session.user_id
-            / str(self._pid)
-            / "images"
-        )
+        image_dir = self._cache_dir / "images"
         image_dir.mkdir(parents=True, exist_ok=True)
         for pic in pics:
             title = pic["title"]
@@ -137,13 +128,10 @@ class BotCommandRandpic(BotCommand):
                 logger.info("发送图片成功")
             except Exception as e:
                 logger.error(f"发送图片失败: {e}")
-                text += f"\n图片发送失败, 大概率被河蟹了, 请尝试私聊使用该命令"
+                text += "\n图片发送失败, 大概率被河蟹了, 请尝试私聊使用该命令"
                 await self.send_msg(text)
 
     async def run(self, args: Message):
-        if not self.session:
-            return
-
         new_argv = args.extract_plain_text().strip().split()
         if not await self._legal_case(new_argv):
             if self._argv is None:

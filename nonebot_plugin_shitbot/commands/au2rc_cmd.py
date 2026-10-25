@@ -36,8 +36,6 @@ class BotCommandAu2rc(BotCommand):
         return parser
 
     async def _preprocess_reply(self, args: Message):
-        if not self.session:
-            return Message()
         if not args or args[0].type != "reply":
             return Message()
 
@@ -51,13 +49,7 @@ class BotCommandAu2rc(BotCommand):
 
         dumped_msg = await dump_message(self.bot, undump_message(reply["message"]))
         dumped_msg[0]["type"] = "record"
-        audio_dir = (
-            config.cache
-            / self.session.group_id
-            / self.session.user_id
-            / str(self._pid)
-            / "audio"
-        )
+        audio_dir = self._cache_dir / "audio"
         audio_dir.mkdir(parents=True, exist_ok=True)
         old_path = audio_dir / f"{uuid.uuid4().hex}"
         new_path = audio_dir / f"{uuid.uuid4().hex}.mp3"
@@ -94,9 +86,6 @@ class BotCommandAu2rc(BotCommand):
         return undump_message(dumped_msg)
 
     async def run(self, args: Message):
-        if not self.session:
-            return
-
         new_argv = args.extract_plain_text().strip().split()
         if not await self._legal_case(new_argv):
             if self._argv is None:
